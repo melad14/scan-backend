@@ -7,3 +7,10 @@ yarn-error.log*
 .DS_Store
 .idea/
 .vscode/
+
+# ScanGo Local Docs & Agentic Configs
+/DEVELOPER_HANDBOOK.md
+/PENDING_CONFIGS.md
+/.agents/
+/antigravity-prompt.md
+/project-documentation-v2.md

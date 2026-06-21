@@ -45,6 +45,12 @@ module.exports = {
     senderId: process.env.SMS_SENDER_ID || 'ScanGo'
   },
   
+  twilio: {
+    accountSid: process.env.TWILIO_ACCOUNT_SID,
+    authToken: process.env.TWILIO_AUTH_TOKEN,
+    verifyServiceSid: process.env.TWILIO_VERIFY_SERVICE_SID
+  },
+  
   features: {
     realtimeTracking: process.env.REALTIME_TRACKING_ENABLED === 'true',
     whatsapp: process.env.WHATSAPP_ENABLED === 'true',

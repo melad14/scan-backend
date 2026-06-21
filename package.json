@@ -23,7 +23,8 @@
     "minio": "^8.0.0",
     "mongoose": "^8.3.1",
     "multer": "^1.4.5-lts.1",
-    "socket.io": "^4.7.5"
+    "socket.io": "^4.7.5",
+    "twilio": "^6.0.2"
   },
   "devDependencies": {
     "mongodb-memory-server": "^9.2.0",

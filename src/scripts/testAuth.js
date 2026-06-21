@@ -1,3 +1,4 @@
+process.env.NODE_ENV = 'test';
 const mongoose = require('mongoose');
 const connectDB = require('../config/db');
 const Service = require('../models/Service');
@@ -28,6 +29,9 @@ const runTests = async () => {
   try {
     console.log('Connecting to database for verification...');
     await connectDB();
+    
+    // Clean up test user from previous runs to ensure registration test runs cleanly
+    await User.deleteOne({ phone: '01000000000' });
     
     // Automatically seed data for verification
     const autoSeed = require('./autoSeed');

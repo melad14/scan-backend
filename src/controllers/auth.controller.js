@@ -6,6 +6,28 @@ const Technician = require('../models/Technician');
 const Admin = require('../models/Admin');
 const OtpLog = require('../models/OtpLog');
 
+let twilioClient;
+if (env.twilio.accountSid && env.twilio.authToken && env.twilio.accountSid !== 'mock') {
+  twilioClient = require('twilio')(env.twilio.accountSid, env.twilio.authToken);
+}
+
+const formatPhoneForTwilio = (phone) => {
+  let clean = phone.replace(/\s+/g, '').replace(/[-()]/g, '');
+  if (clean.startsWith('+')) {
+    return clean;
+  }
+  if (clean.startsWith('00')) {
+    return '+' + clean.slice(2);
+  }
+  if (clean.startsWith('20')) {
+    return '+' + clean;
+  }
+  if (clean.startsWith('0')) {
+    return '+20' + clean.slice(1);
+  }
+  return '+20' + clean;
+};
+
 // Helper to generate access and refresh tokens
 const generateTokens = (id, role) => {
   const accessToken = jwt.sign({ id, role }, env.jwt.accessSecret, {
@@ -31,30 +53,49 @@ exports.sendOtp = async (req, res, next) => {
       });
     }
 
-    // Generate 6-digit OTP
-    // For testing/mock purposes, if phone is 01000000000 we can make OTP 123456
-    let otp = '123456';
-    if (env.nodeEnv !== 'test' && phone !== '01000000000') {
-      otp = String(Math.floor(100000 + Math.random() * 900000));
-    }
+    const isMockPhone = phone === '01000000000' || env.nodeEnv === 'test';
+    const useTwilio = twilioClient && !isMockPhone;
 
-    // Hash the OTP
-    const otpHash = await bcrypt.hash(otp, 10);
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    if (useTwilio) {
+      const twilioPhone = formatPhoneForTwilio(phone);
+      await twilioClient.verify.v2.services(env.twilio.verifyServiceSid)
+        .verifications
+        .create({ to: twilioPhone, channel: 'sms' });
 
-    // Save OtpLog
-    await OtpLog.create({
-      phone,
-      otpHash,
-      expiresAt
-    });
+      // Save OtpLog as an audit/tracker
+      await OtpLog.create({
+        phone,
+        otpHash: 'twilio_verify_sent',
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes validation window
+      });
 
-    // Mock SMS provider or log it
-    console.log(`[SMS OTP MOCK] Phone: ${phone} -> OTP: ${otp}`);
-    
-    // In production, trigger SMS gateway here if apiKey !== 'mock'
-    if (env.sms.apiKey !== 'mock') {
-      // call SMS API provider
+      console.log(`[SMS OTP TWILIO] Sent verification to phone: ${twilioPhone}`);
+    } else {
+      // Generate 6-digit OTP
+      // For testing/mock purposes, if phone is 01000000000 we can make OTP 123456
+      let otp = '123456';
+      if (phone !== '01000000000') {
+        otp = String(Math.floor(100000 + Math.random() * 900000));
+      }
+
+      // Hash the OTP
+      const otpHash = await bcrypt.hash(otp, 10);
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+
+      // Save OtpLog
+      await OtpLog.create({
+        phone,
+        otpHash,
+        expiresAt
+      });
+
+      // Mock SMS provider or log it
+      console.log(`[SMS OTP MOCK] Phone: ${phone} -> OTP: ${otp}`);
+      
+      // In production, trigger SMS gateway here if apiKey !== 'mock'
+      if (env.sms.apiKey !== 'mock') {
+        // call SMS API provider
+      }
     }
 
     res.status(200).json({
@@ -62,7 +103,16 @@ exports.sendOtp = async (req, res, next) => {
       message: 'تم إرسال رمز التحقق بنجاح'
     });
   } catch (error) {
-    next(error);
+    console.error('Error in sendOtp:', error);
+    if (next) {
+      next(error);
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'حدث خطأ أثناء إرسال رمز التحقق',
+        error: error.message
+      });
+    }
   }
 };
 
@@ -80,48 +130,84 @@ exports.verifyOtp = async (req, res, next) => {
       });
     }
 
-    // Find the latest active OTP log for this phone number
-    const otpLog = await OtpLog.findOne({
-      phone,
-      isUsed: false,
-      expiresAt: { $gt: new Date() }
-    }).sort({ createdAt: -1 });
+    const isMockPhone = phone === '01000000000' || env.nodeEnv === 'test';
+    const useTwilio = twilioClient && !isMockPhone;
 
-    if (!otpLog) {
-      return res.status(400).json({
-        success: false,
-        message: 'رمز التحقق غير صالح أو انتهت صلاحيته',
-        code: 'AUTH_001',
-        statusCode: 400
-      });
-    }
+    if (useTwilio) {
+      try {
+        const twilioPhone = formatPhoneForTwilio(phone);
+        const verification = await twilioClient.verify.v2.services(env.twilio.verifyServiceSid)
+          .verificationChecks
+          .create({ to: twilioPhone, code: otp });
 
-    // Check attempts limit
-    if (otpLog.attempts >= 5) {
-      return res.status(429).json({
-        success: false,
-        message: 'تجاوزت الحد الأقصى للمحاولات. يرجى طلب رمز جديد.',
-        code: 'AUTH_002',
-        statusCode: 429
-      });
-    }
+        if (verification.status !== 'approved') {
+          return res.status(400).json({
+            success: false,
+            message: 'رمز التحقق غير صحيح',
+            code: 'AUTH_001',
+            statusCode: 400
+          });
+        }
 
-    // Compare hash
-    const isMatch = await bcrypt.compare(otp, otpLog.otpHash);
-    if (!isMatch) {
-      otpLog.attempts += 1;
+        // Mark the tracker record in local DB as used if found
+        await OtpLog.findOneAndUpdate(
+          { phone, otpHash: 'twilio_verify_sent', isUsed: false },
+          { isUsed: true }
+        ).sort({ createdAt: -1 });
+
+      } catch (err) {
+        console.error('Twilio verification check error:', err);
+        return res.status(400).json({
+          success: false,
+          message: 'رمز التحقق غير صالح أو انتهت صلاحيته',
+          code: 'AUTH_001',
+          statusCode: 400
+        });
+      }
+    } else {
+      // Find the latest active OTP log for this phone number
+      const otpLog = await OtpLog.findOne({
+        phone,
+        isUsed: false,
+        expiresAt: { $gt: new Date() }
+      }).sort({ createdAt: -1 });
+
+      if (!otpLog) {
+        return res.status(400).json({
+          success: false,
+          message: 'رمز التحقق غير صالح أو انتهت صلاحيته',
+          code: 'AUTH_001',
+          statusCode: 400
+        });
+      }
+
+      // Check attempts limit
+      if (otpLog.attempts >= 5) {
+        return res.status(429).json({
+          success: false,
+          message: 'تجاوزت الحد الأقصى للمحاولات. يرجى طلب رمز جديد.',
+          code: 'AUTH_002',
+          statusCode: 429
+        });
+      }
+
+      // Compare hash
+      const isMatch = await bcrypt.compare(otp, otpLog.otpHash);
+      if (!isMatch) {
+        otpLog.attempts += 1;
+        await otpLog.save();
+        return res.status(400).json({
+          success: false,
+          message: 'رمز التحقق غير صحيح',
+          code: 'AUTH_001',
+          statusCode: 400
+        });
+      }
+
+      // OTP is correct! Mark it as used
+      otpLog.isUsed = true;
       await otpLog.save();
-      return res.status(400).json({
-        success: false,
-        message: 'رمز التحقق غير صحيح',
-        code: 'AUTH_001',
-        statusCode: 400
-      });
     }
-
-    // OTP is correct! Mark it as used
-    otpLog.isUsed = true;
-    await otpLog.save();
 
     // Check if user (patient) exists
     const user = await User.findOne({ phone, isActive: true });
@@ -165,7 +251,16 @@ exports.verifyOtp = async (req, res, next) => {
       }
     });
   } catch (error) {
-    next(error);
+    console.error('Error in verifyOtp:', error);
+    if (next) {
+      next(error);
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'حدث خطأ أثناء التحقق من الرمز',
+        error: error.message
+      });
+    }
   }
 };
 

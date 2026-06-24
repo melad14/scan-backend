@@ -20,4 +20,9 @@ router.put('/technicians/:id/toggle-active', adminController.toggleTechnicianAct
 router.get('/patients', adminController.getAllPatients);
 router.put('/pricing', adminController.editPricingConfig);
 
+// Service Catalog Management
+router.post('/services', adminController.createService);
+router.put('/services/:id', adminController.updateService);
+router.delete('/services/:id', adminController.deleteService);
+
 module.exports = router;

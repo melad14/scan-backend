@@ -2,6 +2,7 @@ const Order = require('../models/Order');
 const Technician = require('../models/Technician');
 const User = require('../models/User');
 const PricingConfig = require('../models/PricingConfig');
+const Service = require('../models/Service');
 const bcrypt = require('bcryptjs');
 const notificationService = require('../services/notification.service');
 
@@ -437,3 +438,97 @@ exports.editPricingConfig = async (req, res, next) => {
     next(error);
   }
 };
+
+// 11. Create a New Service
+exports.createService = async (req, res, next) => {
+  try {
+    const { nameAr, nameEn, category, price, description, sortOrder } = req.body;
+
+    if (!nameAr || !nameEn || !category || price === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'بيانات الخدمة غير مكتملة',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    const service = await Service.create({
+      nameAr,
+      nameEn,
+      category,
+      price: Number(price),
+      description: description || '',
+      sortOrder: Number(sortOrder || 0),
+      isActive: true
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إضافة الخدمة بنجاح',
+      data: service
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 12. Update Service Details
+exports.updateService = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { nameAr, nameEn, category, price, description, sortOrder, isActive } = req.body;
+
+    const service = await Service.findById(id);
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'الخدمة غير موجودة',
+        code: 'NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    if (nameAr !== undefined) service.nameAr = nameAr;
+    if (nameEn !== undefined) service.nameEn = nameEn;
+    if (category !== undefined) service.category = category;
+    if (price !== undefined) service.price = Number(price);
+    if (description !== undefined) service.description = description;
+    if (sortOrder !== undefined) service.sortOrder = Number(sortOrder);
+    if (isActive !== undefined) service.isActive = isActive;
+
+    await service.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث الخدمة بنجاح',
+      data: service
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 13. Delete Service Document
+exports.deleteService = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const service = await Service.findByIdAndDelete(id);
+    if (!service) {
+      return res.status(404).json({
+        success: false,
+        message: 'الخدمة غير موجودة',
+        code: 'NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف الخدمة بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

@@ -45,6 +45,8 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 503;
     message = 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً';
     code = 'DB_TIMEOUT';
+    // Temporarily exposing exact error for debugging
+    errorDetails = err.message;
   }
 
   res.status(statusCode).json({

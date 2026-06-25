@@ -23,6 +23,16 @@ try {
   return;
 }
 
+// DEBUG ENDPOINT - shows exact connection error (remove in production)
+app.get('/debug', async (req, res) => {
+  try {
+    await connectDB();
+    res.json({ success: true, message: 'DB Connected OK', uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET' });
+  }
+});
+
 // Middleware to ensure DB connection and auto-seeding on every request (Vercel serverless pattern)
 app.use(async (req, res, next) => {
   try {

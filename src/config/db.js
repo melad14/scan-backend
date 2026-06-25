@@ -8,32 +8,15 @@ const connectDB = async () => {
   
   try {
     console.log(`Attempting to connect to MongoDB at: ${connectionUri}`);
-    // Try to connect with a short timeout to fail fast if MongoDB is not running
+    // Increased timeout for Vercel cold starts
     const conn = await mongoose.connect(connectionUri, {
-      serverSelectionTimeoutMS: 3000 // 3 seconds timeout
+      serverSelectionTimeoutMS: 15000
     });
     console.log(`MongoDB Connected: ${conn.connection.host}`);
   } catch (error) {
-    console.warn(`\n⚠️ Failed to connect to MongoDB at ${connectionUri}: ${error.message}`);
-    console.warn('🔄 "Do Everything Yourself" Mode active: Launching an In-Memory MongoDB Server...');
-
-    try {
-      const { MongoMemoryServer } = require('mongodb-memory-server');
-      mongoServer = await MongoMemoryServer.create();
-      const inMemoryUri = mongoServer.getUri();
-      
-      console.log(`In-Memory MongoDB Server started successfully.`);
-      console.log(`Connecting to In-Memory DB: ${inMemoryUri}`);
-      
-      const conn = await mongoose.connect(inMemoryUri);
-      console.log(`MongoDB (In-Memory) Connected: ${conn.connection.host}`);
-      
-      // Override the env config so other scripts can access the in-memory URI if needed
-      env.mongodbUri = inMemoryUri;
-    } catch (inMemError) {
-      console.error(`CRITICAL ERROR: Failed to start In-Memory MongoDB: ${inMemError.message}`);
-      process.exit(1);
-    }
+    console.error(`\n⚠️ Failed to connect to MongoDB: ${error.message}`);
+    // We throw the error so that api/index.js catches it and returns 503 instead of falling back to MongoMemoryServer which causes issues on Vercel
+    throw error;
   }
 };
 

@@ -9,8 +9,10 @@ const requiredEnv = [
 // Check required variables
 const missing = requiredEnv.filter(key => !process.env[key]);
 if (missing.length > 0) {
-  console.error(`CRITICAL ERROR: Missing required environment variables: ${missing.join(', ')}`);
-  process.exit(1);
+  const errorMsg = `CRITICAL ERROR: Missing required environment variables: ${missing.join(', ')}`;
+  console.error(errorMsg);
+  // Don't use process.exit() in serverless environments - throw instead
+  throw new Error(errorMsg);
 }
 
 module.exports = {

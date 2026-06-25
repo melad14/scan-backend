@@ -3,21 +3,37 @@ const env = require('./env');
 
 let mongoServer = null;
 
+let cached = global.mongoose;
+if (!cached) {
+  cached = global.mongoose = { conn: null, promise: null };
+}
+
 const connectDB = async () => {
-  const connectionUri = env.mongodbUri;
-  
-  try {
-    console.log(`Attempting to connect to MongoDB at: ${connectionUri}`);
-    // Increased timeout for Vercel cold starts
-    const conn = await mongoose.connect(connectionUri, {
-      serverSelectionTimeoutMS: 15000
+  if (cached.conn) {
+    return cached.conn;
+  }
+
+  if (!cached.promise) {
+    console.log(`Attempting to connect to MongoDB at: ${env.mongodbUri}`);
+    const opts = {
+      bufferCommands: false,
+      serverSelectionTimeoutMS: 15000,
+    };
+    cached.promise = mongoose.connect(env.mongodbUri, opts).then((mongoose) => {
+      console.log(`MongoDB Connected`);
+      return mongoose;
     });
-    console.log(`MongoDB Connected: ${conn.connection.host}`);
+  }
+
+  try {
+    cached.conn = await cached.promise;
   } catch (error) {
+    cached.promise = null;
     console.error(`\n⚠️ Failed to connect to MongoDB: ${error.message}`);
-    // We throw the error so that api/index.js catches it and returns 503 instead of falling back to MongoMemoryServer which causes issues on Vercel
     throw error;
   }
+  
+  return cached.conn;
 };
 
 // Gracefully close connection and stop memory server on exit

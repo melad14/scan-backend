@@ -36,6 +36,26 @@ app.get('/health', (req, res) => {
   });
 });
 
+// DEBUG: shows exact DB connection error (remove after debugging)
+app.get('/api/v1/debug-db', async (req, res) => {
+  const mongoose = require('mongoose');
+  const connectDB = require('./config/db');
+  try {
+    await connectDB();
+    res.json({
+      success: true,
+      dbState: mongoose.connection.readyState,
+      uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET'
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err.message,
+      uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET'
+    });
+  }
+});
+
 // Route files imports
 const authRoutes = require('./routes/auth.routes');
 const orderRoutes = require('./routes/orders.routes');

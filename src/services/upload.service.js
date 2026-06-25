@@ -4,10 +4,22 @@ const crypto = require('crypto');
 const { minioClient, useLocalFallback, buckets } = require('../config/minio');
 const env = require('../config/env');
 
-// Ensure local upload directory exists for fallback
-const localUploadDir = path.join(__dirname, '../../public/uploads');
-if (!fs.existsSync(localUploadDir)) {
-  fs.mkdirSync(localUploadDir, { recursive: true });
+// Ensure local upload directory exists for fallback (with fallback to /tmp if read-only filesystem)
+let localUploadDir = path.join(__dirname, '../../public/uploads');
+try {
+  if (!fs.existsSync(localUploadDir)) {
+    fs.mkdirSync(localUploadDir, { recursive: true });
+  }
+} catch (err) {
+  console.warn(`⚠️ Unable to create local upload directory at ${localUploadDir}, falling back to /tmp/uploads:`, err.message);
+  localUploadDir = '/tmp/uploads';
+  try {
+    if (!fs.existsSync(localUploadDir)) {
+      fs.mkdirSync(localUploadDir, { recursive: true });
+    }
+  } catch (tmpErr) {
+    console.error('CRITICAL: Unable to write to /tmp directory:', tmpErr.message);
+  }
 }
 
 /**

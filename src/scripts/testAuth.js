@@ -31,7 +31,8 @@ const runTests = async () => {
     await connectDB();
     
     // Clean up test user from previous runs to ensure registration test runs cleanly
-    await User.deleteOne({ phone: '01000000000' });
+    await User.deleteOne({ username: 'testuser' });
+    await User.deleteOne({ email: 'test@scango.com' });
     
     // Automatically seed data for verification
     const autoSeed = require('./autoSeed');
@@ -84,18 +85,7 @@ const runTests = async () => {
       passed = false;
     }
 
-    console.log('\n--- Test 3: Mock OTP Verification (New User Registration) ---');
-    // For phone 01000000000 we default OTP to '123456' as coded, or retrieve it from DB.
-    // Let's create an OTP for phone 01099999999 in DB and read it
-    const latestOtp = await OtpLog.findOne({ phone }).sort({ createdAt: -1 });
-    if (!latestOtp) {
-      console.log('❌ No OTP log found in database!');
-      passed = false;
-    }
-
-    // We will verify the OTP (we mock user inputting '123456' for phone 01000000000,
-    // or let's use the actual OTP generated or just 01000000000 default)
-    // To be 100% deterministic, we can verify phone '01000000000' with code '123456' after creating it
+    console.log('\n--- Test 3: Mock OTP Verification ---');
     const testPhone = '01000000000';
     const reqSendDet = { body: { phone: testPhone } };
     const resSendDet = mockRes();
@@ -105,43 +95,52 @@ const runTests = async () => {
     const resVerify = mockRes();
     await authController.verifyOtp(reqVerify, resVerify);
 
-    let registerToken;
-    if (resVerify.statusCode === 200 && resVerify.body.data.isNewUser) {
-      console.log('✅ OTP Verification detected new user and returned registration token!');
-      registerToken = resVerify.body.data.registerToken;
+    if (resVerify.statusCode === 200 && resVerify.body.success) {
+      console.log('✅ OTP Verification verified successfully!');
     } else {
       console.log('❌ OTP verification failed:', resVerify.body);
       passed = false;
     }
 
-    console.log('\n--- Test 4: New User Registration ---');
-    if (registerToken) {
-      // Clean up user first if exists from previous runs
-      await User.deleteOne({ phone: testPhone });
-
-      const reqReg = {
-        body: {
-          name: 'المريض التجريبي',
-          age: 30,
-          gender: 'male',
-          registerToken
-        }
-      };
-      const resReg = mockRes();
-      await authController.register(reqReg, resReg);
-
-      if (resReg.statusCode === 201 && resReg.body.data.accessToken) {
-        console.log('✅ Registration completed successfully and JWT token returned!');
-      } else {
-        console.log('❌ User registration failed:', resReg.body);
-        passed = false;
+    console.log('\n--- Test 4: Patient Registration ---');
+    const reqReg = {
+      body: {
+        username: 'testuser',
+        name: 'المريض التجريبي',
+        email: 'test@scango.com',
+        password: 'testpassword'
       }
+    };
+    const resReg = mockRes();
+    await authController.registerPatient(reqReg, resReg);
+
+    let patientAccessToken;
+    if (resReg.statusCode === 201 && resReg.body.data.accessToken) {
+      console.log('✅ Patient Registration completed successfully and JWT token returned!');
+      patientAccessToken = resReg.body.data.accessToken;
     } else {
-      console.log('❌ Skipping registration test due to missing token');
+      console.log('❌ Patient registration failed:', resReg.body);
       passed = false;
     }
 
-    console.log('\n--- Test 5: Admin Login ---');
+    console.log('\n--- Test 5: Patient Login ---');
+    const reqLogin = {
+      body: {
+        username: 'testuser',
+        password: 'testpassword'
+      }
+    };
+    const resLogin = mockRes();
+    await authController.loginPatient(reqLogin, resLogin);
+
+    if (resLogin.statusCode === 200 && resLogin.body.data.accessToken) {
+      console.log('✅ Patient login verified!');
+    } else {
+      console.log('❌ Patient login failed:', resLogin.body);
+      passed = false;
+    }
+
+    console.log('\n--- Test 6: Admin Login ---');
     const reqAdminLogin = { body: { email: 'admin@scango.com', password: 'adminpassword' } };
     const resAdminLogin = mockRes();
     await authController.loginAdmin(reqAdminLogin, resAdminLogin);
@@ -155,7 +154,7 @@ const runTests = async () => {
       passed = false;
     }
 
-    console.log('\n--- Test 6: Token Refresh Rotation ---');
+    console.log('\n--- Test 7: Token Refresh Rotation ---');
     if (adminRefreshToken) {
       const reqRefresh = { body: { refreshToken: adminRefreshToken } };
       const resRefresh = mockRes();

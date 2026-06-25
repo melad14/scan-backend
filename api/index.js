@@ -13,6 +13,11 @@ app.use(async (req, res, next) => {
       dbConnected = true;
     } catch (err) {
       console.error('Database connection error in Vercel function:', err);
+      return res.status(503).json({
+        success: false,
+        message: 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً',
+        code: 'DB_CONNECTION_ERROR'
+      });
     }
   }
   next();

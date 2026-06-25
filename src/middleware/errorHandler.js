@@ -40,6 +40,13 @@ const errorHandler = (err, req, res, next) => {
     code = 'AUTH_004';
   }
 
+  // Handle Mongoose/MongoDB Timeout & Connection Errors
+  if (err.message && (err.message.includes('buffering timed out') || err.message.includes('failed to connect') || err.message.includes('MongooseServerSelectionError'))) {
+    statusCode = 503;
+    message = 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً';
+    code = 'DB_TIMEOUT';
+  }
+
   res.status(statusCode).json({
     success: false,
     message,

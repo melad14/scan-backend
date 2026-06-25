@@ -39,7 +39,168 @@ const generateTokens = (id, role) => {
   return { accessToken, refreshToken };
 };
 
-// 1. Send OTP to Patient
+// ────────────────────────────────────────────────────────────────────────────
+// PATIENT AUTH — Username & Password
+// ────────────────────────────────────────────────────────────────────────────
+
+// 1. Register Patient (Username + Name + Email + Password)
+exports.registerPatient = async (req, res, next) => {
+  try {
+    const { username, name, email, password } = req.body;
+
+    // Validation
+    if (!username || !name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'جميع الحقول مطلوبة: اسم المستخدم والاسم والبريد الإلكتروني وكلمة المرور',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    // Check username uniqueness
+    const existingUsername = await User.findOne({ username: username.toLowerCase().trim() });
+    if (existingUsername) {
+      return res.status(400).json({
+        success: false,
+        message: 'اسم المستخدم مستخدم بالفعل، يرجى اختيار اسم آخر',
+        code: 'DUPLICATE_KEY',
+        statusCode: 400
+      });
+    }
+
+    // Check email uniqueness
+    const existingEmail = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني مسجل بالفعل',
+        code: 'DUPLICATE_KEY',
+        statusCode: 400
+      });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create new patient
+    const user = await User.create({
+      username: username.toLowerCase().trim(),
+      name: name.trim(),
+      email: email.toLowerCase().trim(),
+      passwordHash,
+      isVerified: true,
+      isActive: true
+    });
+
+    const tokens = generateTokens(user._id, 'patient');
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح',
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          name: user.name,
+          email: user.email
+        },
+        ...tokens
+      }
+    });
+  } catch (error) {
+    // Handle mongoose validation errors
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern)[0];
+      const fieldArabic = field === 'username' ? 'اسم المستخدم' : 'البريد الإلكتروني';
+      return res.status(400).json({
+        success: false,
+        message: `${fieldArabic} مستخدم بالفعل`,
+        code: 'DUPLICATE_KEY',
+        statusCode: 400
+      });
+    }
+    next(error);
+  }
+};
+
+// 2. Login Patient (Username + Password)
+exports.loginPatient = async (req, res, next) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'اسم المستخدم وكلمة المرور مطلوبان',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    // Find user by username (or email — flexible login)
+    const isEmail = username.includes('@');
+    const query = isEmail
+      ? { email: username.toLowerCase().trim(), isActive: true }
+      : { username: username.toLowerCase().trim(), isActive: true };
+
+    const user = await User.findOne(query);
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'اسم المستخدم أو كلمة المرور غير صحيحة',
+        code: 'AUTH_003',
+        statusCode: 401
+      });
+    }
+
+    // Compare password
+    const isMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: 'اسم المستخدم أو كلمة المرور غير صحيحة',
+        code: 'AUTH_003',
+        statusCode: 401
+      });
+    }
+
+    const tokens = generateTokens(user._id, 'patient');
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تسجيل الدخول بنجاح',
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          name: user.name,
+          email: user.email,
+          age: user.age,
+          gender: user.gender
+        },
+        ...tokens
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// OTP AUTH — Kept for Technician SMS flows (future use)
+// ────────────────────────────────────────────────────────────────────────────
+
+// 3. Send OTP (kept for technician or future patient phone verification)
 exports.sendOtp = async (req, res, next) => {
   try {
     const { phone } = req.body;
@@ -62,37 +223,26 @@ exports.sendOtp = async (req, res, next) => {
         .verifications
         .create({ to: twilioPhone, channel: 'sms' });
 
-      // Save OtpLog as an audit/tracker
       await OtpLog.create({
         phone,
         otpHash: 'twilio_verify_sent',
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes validation window
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000)
       });
 
       console.log(`[SMS OTP TWILIO] Sent verification to phone: ${twilioPhone}`);
     } else {
-      // Generate 6-digit OTP
-      // For testing/mock purposes, if phone is 01000000000 we can make OTP 123456
       let otp = '123456';
       if (phone !== '01000000000') {
         otp = String(Math.floor(100000 + Math.random() * 900000));
       }
 
-      // Hash the OTP
       const otpHash = await bcrypt.hash(otp, 10);
-      const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+      const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
-      // Save OtpLog
-      await OtpLog.create({
-        phone,
-        otpHash,
-        expiresAt
-      });
+      await OtpLog.create({ phone, otpHash, expiresAt });
 
-      // Mock SMS provider or log it
       console.log(`[SMS OTP MOCK] Phone: ${phone} -> OTP: ${otp}`);
-      
-      // In production, trigger SMS gateway here if apiKey !== 'mock'
+
       if (env.sms.apiKey !== 'mock') {
         // call SMS API provider
       }
@@ -116,7 +266,7 @@ exports.sendOtp = async (req, res, next) => {
   }
 };
 
-// 2. Verify OTP
+// 4. Verify OTP
 exports.verifyOtp = async (req, res, next) => {
   try {
     const { phone, otp } = req.body;
@@ -149,7 +299,6 @@ exports.verifyOtp = async (req, res, next) => {
           });
         }
 
-        // Mark the tracker record in local DB as used if found
         await OtpLog.findOneAndUpdate(
           { phone, otpHash: 'twilio_verify_sent', isUsed: false },
           { isUsed: true }
@@ -165,7 +314,6 @@ exports.verifyOtp = async (req, res, next) => {
         });
       }
     } else {
-      // Find the latest active OTP log for this phone number
       const otpLog = await OtpLog.findOne({
         phone,
         isUsed: false,
@@ -181,7 +329,6 @@ exports.verifyOtp = async (req, res, next) => {
         });
       }
 
-      // Check attempts limit
       if (otpLog.attempts >= 5) {
         return res.status(429).json({
           success: false,
@@ -191,7 +338,6 @@ exports.verifyOtp = async (req, res, next) => {
         });
       }
 
-      // Compare hash
       const isMatch = await bcrypt.compare(otp, otpLog.otpHash);
       if (!isMatch) {
         otpLog.attempts += 1;
@@ -204,51 +350,13 @@ exports.verifyOtp = async (req, res, next) => {
         });
       }
 
-      // OTP is correct! Mark it as used
       otpLog.isUsed = true;
       await otpLog.save();
     }
 
-    // Check if user (patient) exists
-    const user = await User.findOne({ phone, isActive: true });
-
-    if (!user) {
-      // If user does not exist, return a registration token
-      // This token validates that they verified their phone number
-      const registerToken = jwt.sign(
-        { phone, action: 'register' },
-        env.jwt.accessSecret,
-        { expiresIn: '10m' }
-      );
-
-      return res.status(200).json({
-        success: true,
-        message: 'تم التحقق من الرمز بنجاح. يرجى إكمال التسجيل.',
-        data: {
-          isNewUser: true,
-          registerToken,
-          phone
-        }
-      });
-    }
-
-    // User exists, issue full access and refresh tokens
-    const tokens = generateTokens(user._id, 'patient');
-
     res.status(200).json({
       success: true,
-      message: 'تم تسجيل الدخول بنجاح',
-      data: {
-        isNewUser: false,
-        user: {
-          id: user._id,
-          name: user.name,
-          phone: user.phone,
-          age: user.age,
-          gender: user.gender
-        },
-        ...tokens
-      }
+      message: 'تم التحقق من الرمز بنجاح'
     });
   } catch (error) {
     console.error('Error in verifyOtp:', error);
@@ -264,81 +372,11 @@ exports.verifyOtp = async (req, res, next) => {
   }
 };
 
-// 3. Register Patient (uses registration token to verify phone ownership)
-exports.register = async (req, res, next) => {
-  try {
-    const { name, age, gender, registerToken } = req.body;
+// ────────────────────────────────────────────────────────────────────────────
+// TECHNICIAN AUTH
+// ────────────────────────────────────────────────────────────────────────────
 
-    if (!name || !registerToken) {
-      return res.status(400).json({
-        success: false,
-        message: 'الاسم ورمز التسجيل مطلوبان',
-        code: 'VALIDATION_ERROR',
-        statusCode: 400
-      });
-    }
-
-    // Verify registration token
-    let decoded;
-    try {
-      decoded = jwt.verify(registerToken, env.jwt.accessSecret);
-      if (decoded.action !== 'register') {
-        throw new Error();
-      }
-    } catch (err) {
-      return res.status(400).json({
-        success: false,
-        message: 'رمز التسجيل غير صالح أو منتهي الصلاحية',
-        code: 'AUTH_001',
-        statusCode: 400
-      });
-    }
-
-    const phone = decoded.phone;
-
-    // Check if user already exists
-    let user = await User.findOne({ phone });
-    if (user) {
-      return res.status(400).json({
-        success: false,
-        message: 'المستخدم مسجل بالفعل',
-        code: 'DUPLICATE_KEY',
-        statusCode: 400
-      });
-    }
-
-    // Create new patient
-    user = await User.create({
-      name,
-      phone,
-      age,
-      gender,
-      isVerified: true,
-      isActive: true
-    });
-
-    const tokens = generateTokens(user._id, 'patient');
-
-    res.status(201).json({
-      success: true,
-      message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح',
-      data: {
-        user: {
-          id: user._id,
-          name: user.name,
-          phone: user.phone,
-          age: user.age,
-          gender: user.gender
-        },
-        ...tokens
-      }
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-// 4. Technician Login (Phone + Password)
+// 5. Technician Login (Phone + Password)
 exports.loginTechnician = async (req, res, next) => {
   try {
     const { phone, password } = req.body;
@@ -393,7 +431,11 @@ exports.loginTechnician = async (req, res, next) => {
   }
 };
 
-// 5. Admin Login (Email + Password)
+// ────────────────────────────────────────────────────────────────────────────
+// ADMIN AUTH
+// ────────────────────────────────────────────────────────────────────────────
+
+// 6. Admin Login (Email + Password)
 exports.loginAdmin = async (req, res, next) => {
   try {
     const { email, password } = req.body;
@@ -447,7 +489,11 @@ exports.loginAdmin = async (req, res, next) => {
   }
 };
 
-// 6. Refresh Token (Rotates both Access & Refresh tokens)
+// ────────────────────────────────────────────────────────────────────────────
+// SHARED — Token Rotation & Logout
+// ────────────────────────────────────────────────────────────────────────────
+
+// 7. Refresh Token (Rotates both Access & Refresh tokens)
 exports.refreshToken = async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
@@ -461,7 +507,6 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Verify token
     let decoded;
     try {
       decoded = jwt.verify(refreshToken, env.jwt.refreshSecret);
@@ -474,7 +519,6 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Check if user still active
     let dbUser;
     if (decoded.role === 'patient') {
       dbUser = await User.findById(decoded.id);
@@ -493,7 +537,6 @@ exports.refreshToken = async (req, res, next) => {
       });
     }
 
-    // Generate new token pair (refresh token rotation)
     const tokens = generateTokens(dbUser._id, decoded.role);
 
     res.status(200).json({
@@ -508,12 +551,11 @@ exports.refreshToken = async (req, res, next) => {
   }
 };
 
-// 7. Logout (Clears FCM Token)
+// 8. Logout (Clears FCM Token)
 exports.logout = async (req, res, next) => {
   try {
     const { id, role } = req.user;
 
-    // Clear FCM token depending on the user type
     if (role === 'patient') {
       await User.findByIdAndUpdate(id, { $set: { fcmToken: null } });
     } else if (role === 'technician') {

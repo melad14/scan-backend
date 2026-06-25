@@ -16,6 +16,7 @@ app.use(async (req, res, next) => {
       return res.status(503).json({
         success: false,
         message: 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً',
+        errorDetails: err.message,
         code: 'DB_CONNECTION_ERROR'
       });
     }

@@ -2,6 +2,8 @@ const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const errorHandler = require('./middleware/errorHandler');
+const connectDB = require('./config/db');
+const autoSeed = require('./scripts/autoSeed');
 
 const app = express();
 
@@ -27,7 +29,7 @@ app.use(express.urlencoded({ extended: true }));
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 
-// Simple healthcheck route
+// Simple healthcheck route (no DB needed)
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
@@ -36,24 +38,21 @@ app.get('/health', (req, res) => {
   });
 });
 
-// DEBUG: shows exact DB connection error (remove after debugging)
-app.get('/api/v1/debug-db', async (req, res) => {
-  const mongoose = require('mongoose');
-  const connectDB = require('./config/db');
+// DB Connection middleware - MUST be before all routes
+app.use(async (req, res, next) => {
   try {
     await connectDB();
-    res.json({
-      success: true,
-      dbState: mongoose.connection.readyState,
-      uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET'
-    });
+    await autoSeed();
   } catch (err) {
-    res.status(500).json({
+    console.error('Database connection error:', err);
+    return res.status(503).json({
       success: false,
-      error: err.message,
-      uri: process.env.MONGODB_URI ? process.env.MONGODB_URI.replace(/:([^@]+)@/, ':***@') : 'NOT SET'
+      message: 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً',
+      errorDetails: err.message,
+      code: 'DB_CONNECTION_ERROR'
     });
   }
+  next();
 });
 
 // Route files imports

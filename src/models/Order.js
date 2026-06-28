@@ -52,6 +52,14 @@ const orderSchema = new mongoose.Schema(
       district: String,
       street: String,
       building: String,
+      houseNumber: String,
+      road: String,
+      neighbourhood: String,
+      suburb: String,
+      city: String,
+      postcode: String,
+      country: String,
+      countryCode: String,
       coordinates: {
         type: {
           type: String,

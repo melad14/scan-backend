@@ -90,6 +90,14 @@ exports.createOrder = async (req, res, next) => {
         district: location.district,
         street: location.street,
         building: location.building,
+        houseNumber: location.houseNumber || '',
+        road: location.road || '',
+        neighbourhood: location.neighbourhood || '',
+        suburb: location.suburb || '',
+        city: location.city || '',
+        postcode: location.postcode || '',
+        country: location.country || '',
+        countryCode: location.countryCode || '',
         coordinates: {
           type: 'Point',
           coordinates: location.coordinates || [31.2357, 30.0444] // default Cairo

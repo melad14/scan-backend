@@ -21,5 +21,6 @@ router.post('/verify-otp', authLimiter, authController.verifyOtp);
 // ─── Token Rotation & Logout ─────────────────────────────────────────────────
 router.post('/refresh-token', authController.refreshToken);
 router.post('/logout', protect, authController.logout);
+router.put('/fcm-token', protect, authController.updateFcmToken);
 
 module.exports = router;

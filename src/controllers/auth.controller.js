@@ -570,3 +570,33 @@ exports.logout = async (req, res, next) => {
     next(error);
   }
 };
+
+// 9. Update FCM Token
+exports.updateFcmToken = async (req, res, next) => {
+  try {
+    const { id, role } = req.user;
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: 'رمز الإشعارات مطلوب',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    if (role === 'patient') {
+      await User.findByIdAndUpdate(id, { $set: { fcmToken } });
+    } else if (role === 'technician') {
+      await Technician.findByIdAndUpdate(id, { $set: { fcmToken } });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث رمز الإشعارات بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

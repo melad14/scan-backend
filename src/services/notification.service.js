@@ -58,9 +58,9 @@ const sendNotification = async ({
 // 1. Notify technicians that a new order is available
 exports.notifyTechniciansNewOrder = async (order) => {
   try {
-    // In Phase 1, we notify all active technicians in region
+    const district = (order.location.district || 'Cairo').trim();
     const technicians = await Technician.find({
-      region: order.location.district || 'Cairo',
+      region: { $regex: new RegExp('^' + district.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') },
       isActive: true,
       isAvailable: true
     });
@@ -69,7 +69,7 @@ exports.notifyTechniciansNewOrder = async (order) => {
       await sendNotification({
         recipientId: tech._id,
         recipientModel: 'Technician',
-        type: 'tech_assigned', // Generic trigger key
+        type: 'new_order', // Generic trigger key
         titleAr: 'طلب خدمة جديد متاح',
         bodyAr: `هناك طلب جديد في منطقتك برقم ${order.orderNumber}، اضغط للتفاصيل`,
         orderId: order._id,

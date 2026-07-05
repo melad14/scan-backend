@@ -24,3 +24,5 @@ router.post('/logout', protect, authController.logout);
 router.put('/fcm-token', protect, authController.updateFcmToken);
 
 module.exports = router;
+
+

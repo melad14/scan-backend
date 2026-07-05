@@ -43,16 +43,16 @@ const generateTokens = (id, role) => {
 // PATIENT AUTH — Username & Password
 // ────────────────────────────────────────────────────────────────────────────
 
-// 1. Register Patient (Username + Name + Email + Password)
+// 1. Register Patient (Username + Name + Email + Password + Phone + Age + Gender)
 exports.registerPatient = async (req, res, next) => {
   try {
-    const { username, name, email, password } = req.body;
+    const { username, name, email, password, phone, age, gender } = req.body;
 
     // Validation
-    if (!username || !name || !email || !password) {
+    if (!username || !name || !email || !password || !phone || !age || !gender) {
       return res.status(400).json({
         success: false,
-        message: 'جميع الحقول مطلوبة: اسم المستخدم والاسم والبريد الإلكتروني وكلمة المرور',
+        message: 'جميع الحقول مطلوبة: اسم المستخدم، الاسم، البريد الإلكتروني، رقم الهاتف، العمر، الجنس، وكلمة المرور',
         code: 'VALIDATION_ERROR',
         statusCode: 400
       });
@@ -62,6 +62,15 @@ exports.registerPatient = async (req, res, next) => {
       return res.status(400).json({
         success: false,
         message: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    if (!['male', 'female'].includes(gender)) {
+      return res.status(400).json({
+        success: false,
+        message: 'الجنس يجب أن يكون male أو female',
         code: 'VALIDATION_ERROR',
         statusCode: 400
       });
@@ -89,6 +98,17 @@ exports.registerPatient = async (req, res, next) => {
       });
     }
 
+    // Check phone uniqueness
+    const existingPhone = await User.findOne({ phone: phone.trim() });
+    if (existingPhone) {
+      return res.status(400).json({
+        success: false,
+        message: 'رقم الهاتف مسجل بالفعل',
+        code: 'DUPLICATE_KEY',
+        statusCode: 400
+      });
+    }
+
     // Hash password
     const passwordHash = await bcrypt.hash(password, 12);
 
@@ -97,6 +117,9 @@ exports.registerPatient = async (req, res, next) => {
       username: username.toLowerCase().trim(),
       name: name.trim(),
       email: email.toLowerCase().trim(),
+      phone: phone.trim(),
+      age: parseInt(age, 10),
+      gender,
       passwordHash,
       isVerified: true,
       isActive: true
@@ -112,7 +135,10 @@ exports.registerPatient = async (req, res, next) => {
           id: user._id,
           username: user.username,
           name: user.name,
-          email: user.email
+          email: user.email,
+          phone: user.phone,
+          age: user.age,
+          gender: user.gender
         },
         ...tokens
       }
@@ -121,7 +147,9 @@ exports.registerPatient = async (req, res, next) => {
     // Handle mongoose validation errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern)[0];
-      const fieldArabic = field === 'username' ? 'اسم المستخدم' : 'البريد الإلكتروني';
+      let fieldArabic = 'البريد الإلكتروني';
+      if (field === 'username') fieldArabic = 'اسم المستخدم';
+      if (field === 'phone') fieldArabic = 'رقم الهاتف';
       return res.status(400).json({
         success: false,
         message: `${fieldArabic} مستخدم بالفعل`,

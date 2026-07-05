@@ -15,7 +15,7 @@ app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, postman, curl)
     if (!origin) return callback(null, true);
-    
+
     // Echo back the requesting origin to prevent CORS blocking local environments or mobile apps
     callback(null, true);
   },
@@ -33,7 +33,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 app.get('/health', (req, res) => {
   res.status(200).json({
     success: true,
-    message: 'Server is running',
+    message: `Server is running on port ${env.port} in ${env.nodeEnv} mode`,
     timestamp: new Date()
   });
 });
@@ -62,6 +62,7 @@ const serviceRoutes = require('./routes/services.routes');
 const techRoutes = require('./routes/technician.routes');
 const adminRoutes = require('./routes/admin.routes');
 const uploadRoutes = require('./routes/upload.routes');
+const profileRoutes = require('./routes/profile.routes');
 
 // Mount routes
 app.use('/api/v1/auth', authRoutes);
@@ -70,6 +71,7 @@ app.use('/api/v1/services', serviceRoutes);
 app.use('/api/v1/technician', techRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/upload', uploadRoutes);
+app.use('/api/v1/profile', profileRoutes);
 
 // Catch-all route for unmatched paths (404)
 app.use((req, res, next) => {

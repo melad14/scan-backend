@@ -3,6 +3,7 @@ const Technician = require('../models/Technician');
 const User = require('../models/User');
 const PricingConfig = require('../models/PricingConfig');
 const Service = require('../models/Service');
+const Category = require('../models/Category');
 const bcrypt = require('bcryptjs');
 const notificationService = require('../services/notification.service');
 
@@ -453,13 +454,19 @@ exports.createService = async (req, res, next) => {
       });
     }
 
+    let finalSortOrder = Number(sortOrder);
+    if (!sortOrder || finalSortOrder === 0) {
+      const maxService = await Service.findOne({ category }).sort({ sortOrder: -1 });
+      finalSortOrder = maxService ? maxService.sortOrder + 10 : 10;
+    }
+
     const service = await Service.create({
       nameAr,
       nameEn,
       category,
       price: Number(price),
       description: description || '',
-      sortOrder: Number(sortOrder || 0),
+      sortOrder: finalSortOrder,
       isActive: true
     });
 
@@ -526,6 +533,216 @@ exports.deleteService = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'تم حذف الخدمة بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 14. Get List of All Categories (Admin)
+exports.getAllCategories = async (req, res, next) => {
+  try {
+    const categories = await Category.find().sort({ sortOrder: 1 });
+    
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع قائمة التصنيفات بنجاح',
+      data: categories
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 15. Create Category
+exports.createCategory = async (req, res, next) => {
+  try {
+    const { nameAr, nameEn, key, icon, iconBg, iconColor, sortOrder, isActive } = req.body;
+
+    if (!nameAr || !nameEn || !key) {
+      return res.status(400).json({
+        success: false,
+        message: 'بيانات التصنيف غير مكتملة (الاسم والمفتاح مطلوبان)',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    const keyLower = key.toLowerCase().trim();
+    const exists = await Category.exists({ key: keyLower });
+    if (exists) {
+      return res.status(400).json({
+        success: false,
+        message: 'مفتاح التصنيف مسجل مسبقاً، يرجى اختيار مفتاح آخر فريد',
+        code: 'DUPLICATE_KEY',
+        statusCode: 400
+      });
+    }
+
+    let finalSortOrder = Number(sortOrder);
+    if (!sortOrder || finalSortOrder === 0) {
+      const maxCat = await Category.findOne().sort({ sortOrder: -1 });
+      finalSortOrder = maxCat ? maxCat.sortOrder + 10 : 10;
+    }
+
+    const category = await Category.create({
+      nameAr,
+      nameEn,
+      key: keyLower,
+      icon: icon || 'category',
+      iconBg: iconBg || '#1A1D9E75',
+      iconColor: iconColor || '#1D9E75',
+      sortOrder: finalSortOrder,
+      isActive: isActive !== undefined ? isActive : true
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'تم إضافة التصنيف بنجاح',
+      data: category
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 16. Update Category Details
+exports.updateCategory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { nameAr, nameEn, key, icon, iconBg, iconColor, sortOrder, isActive } = req.body;
+
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'التصنيف غير موجود',
+        code: 'NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    if (key !== undefined) {
+      const keyLower = key.toLowerCase().trim();
+      if (keyLower !== category.key) {
+        const exists = await Category.exists({ key: keyLower, _id: { $ne: id } });
+        if (exists) {
+          return res.status(400).json({
+            success: false,
+            message: 'مفتاح التصنيف مسجل مسبقاً لموقع آخر',
+            code: 'DUPLICATE_KEY',
+            statusCode: 400
+          });
+        }
+        
+        // Also update any services that are using the old category key!
+        await Service.updateMany({ category: category.key }, { category: keyLower });
+        category.key = keyLower;
+      }
+    }
+
+    if (nameAr !== undefined) category.nameAr = nameAr;
+    if (nameEn !== undefined) category.nameEn = nameEn;
+    if (icon !== undefined) category.icon = icon;
+    if (iconBg !== undefined) category.iconBg = iconBg;
+    if (iconColor !== undefined) category.iconColor = iconColor;
+    if (sortOrder !== undefined) category.sortOrder = Number(sortOrder);
+    if (isActive !== undefined) category.isActive = isActive;
+
+    await category.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث التصنيف بنجاح',
+      data: category
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 17. Delete Category
+exports.deleteCategory = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const category = await Category.findById(id);
+    if (!category) {
+      return res.status(404).json({
+        success: false,
+        message: 'التصنيف غير موجود',
+        code: 'NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    // Check if there are active services in this category
+    const servicesCount = await Service.countDocuments({ category: category.key });
+    if (servicesCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن حذف التصنيف لوجود خدمات نشطة مرتبطة به حالياً. يرجى حذف الخدمات أو نقلها أولاً.',
+        code: 'DELETE_DENIED',
+        statusCode: 400
+      });
+    }
+
+    await Category.findByIdAndDelete(id);
+
+    res.status(200).json({
+      success: true,
+      message: 'تم حذف التصنيف بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 18. Reorder Categories
+exports.reorderCategories = async (req, res, next) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'قائمة المعرفات مطلوبة لإعادة الترتيب',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await Category.findByIdAndUpdate(orderedIds[i], { sortOrder: (i + 1) * 10 });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إعادة ترتيب التصنيفات بنجاح'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 19. Reorder Services
+exports.reorderServices = async (req, res, next) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({
+        success: false,
+        message: 'قائمة المعرفات مطلوبة لإعادة الترتيب',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    for (let i = 0; i < orderedIds.length; i++) {
+      await Service.findByIdAndUpdate(orderedIds[i], { sortOrder: (i + 1) * 10 });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إعادة ترتيب الخدمات بنجاح'
     });
   } catch (error) {
     next(error);

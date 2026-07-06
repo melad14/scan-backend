@@ -20,7 +20,6 @@ const orderSchema = new mongoose.Schema(
     },
     serviceCategory: {
       type: String,
-      enum: ['xray', 'lab'],
       required: true
     },
     services: [

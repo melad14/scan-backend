@@ -22,7 +22,15 @@ router.put('/pricing', adminController.editPricingConfig);
 
 // Service Catalog Management
 router.post('/services', adminController.createService);
+router.put('/services/reorder', adminController.reorderServices);
 router.put('/services/:id', adminController.updateService);
 router.delete('/services/:id', adminController.deleteService);
+
+// Service Category Management
+router.get('/categories', adminController.getAllCategories);
+router.post('/categories', adminController.createCategory);
+router.put('/categories/reorder', adminController.reorderCategories);
+router.put('/categories/:id', adminController.updateCategory);
+router.delete('/categories/:id', adminController.deleteCategory);
 
 module.exports = router;

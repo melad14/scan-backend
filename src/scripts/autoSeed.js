@@ -1,18 +1,69 @@
 const bcrypt = require('bcryptjs');
 const Service = require('../models/Service');
+const Category = require('../models/Category');
 const PricingConfig = require('../models/PricingConfig');
 const Admin = require('../models/Admin');
 const Technician = require('../models/Technician');
 
 const autoSeed = async () => {
   try {
+    // 1. Seed Categories if empty
+    const categoryCount = await Category.countDocuments();
+    if (categoryCount === 0) {
+      console.log('Categories collection is empty. Seeding defaults...');
+      const categories = [
+        {
+          nameAr: 'أشعة سينية',
+          nameEn: 'X-Ray',
+          key: 'xray',
+          icon: 'monitor_heart',
+          iconBg: '#1A1D9E75',
+          iconColor: '#1D9E75',
+          sortOrder: 1,
+          isActive: true
+        },
+        {
+          nameAr: 'إيكو قلب',
+          nameEn: 'Echo',
+          key: 'echo',
+          icon: 'favorite',
+          iconBg: '#E6F0FA',
+          iconColor: '#2B7EC2',
+          sortOrder: 2,
+          isActive: true
+        },
+        {
+          nameAr: 'رسم قلب',
+          nameEn: 'ECG',
+          key: 'ecg',
+          icon: 'show_chart',
+          iconBg: '#FEF3E2',
+          iconColor: '#D97B0A',
+          sortOrder: 3,
+          isActive: true
+        },
+        {
+          nameAr: 'تحاليل طبية',
+          nameEn: 'Lab Tests',
+          key: 'lab',
+          icon: 'science',
+          iconBg: '#EFF6E8',
+          iconColor: '#4D8C2C',
+          sortOrder: 4,
+          isActive: true
+        }
+      ];
+      await Category.insertMany(categories);
+      console.log('Seeded 4 default categories successfully.');
+    }
+
     const serviceCount = await Service.countDocuments();
     if (serviceCount > 0) {
-      console.log('Database already has data. Skipping auto-seeding.');
+      console.log('Database already has services. Skipping services auto-seeding.');
       return;
     }
 
-    console.log('Database is empty. Running auto-seeding...');
+    console.log('Database is empty. Running services auto-seeding...');
 
     const services = [
       {
@@ -34,10 +85,18 @@ const autoSeed = async () => {
       {
         nameAr: 'رسم قلب متنقل',
         nameEn: 'ECG / Electrocardiogram',
-        category: 'xray',
+        category: 'ecg',
         price: 300,
         sortOrder: 3,
         description: 'رسم قلب منزلي متنقل مع تقرير فوري'
+      },
+      {
+        nameAr: 'فحص إيكو على القلب منزلي',
+        nameEn: 'Home Echocardiography (Echo)',
+        category: 'echo',
+        price: 800,
+        sortOrder: 4,
+        description: 'فحص الموجات الصوتية على القلب (الإيكو) منزلياً مع تقرير مفصل'
       },
       {
         nameAr: 'صورة دم كاملة',

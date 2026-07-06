@@ -46,6 +46,52 @@ exports.getLabServices = async (req, res, next) => {
   }
 };
 
+// 4. Get active Echo services
+exports.getEchoServices = async (req, res, next) => {
+  try {
+    const services = await Service.find({ category: 'echo', isActive: true }).sort({ sortOrder: 1 });
+    
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع خدمات الإيكو بنجاح',
+      data: services
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 5. Get active ECG services
+exports.getEcgServices = async (req, res, next) => {
+  try {
+    const services = await Service.find({ category: 'ecg', isActive: true }).sort({ sortOrder: 1 });
+    
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع خدمات رسم القلب بنجاح',
+      data: services
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 6. Get active services by category slug
+exports.getServicesByCategory = async (req, res, next) => {
+  try {
+    const { categoryKey } = req.params;
+    const services = await Service.find({ category: categoryKey, isActive: true }).sort({ sortOrder: 1 });
+    
+    res.status(200).json({
+      success: true,
+      message: `تم استرجاع خدمات التصنيف ${categoryKey} بنجاح`,
+      data: services
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // 4. Get active Surcharge Surcharges Config
 exports.getPricingConfig = async (req, res, next) => {
   try {

@@ -12,7 +12,6 @@ const serviceSchema = new mongoose.Schema(
     },
     category: {
       type: String,
-      enum: ['xray', 'lab'],
       required: [true, 'نوع الخدمة مطلوب']
     },
     price: {

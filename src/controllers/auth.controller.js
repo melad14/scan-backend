@@ -125,6 +125,23 @@ exports.registerPatient = async (req, res, next) => {
       isActive: true
     });
 
+    // Auto-create default 'self' SavedPatient profile
+    try {
+      const SavedPatient = require('../models/SavedPatient');
+      await SavedPatient.create({
+        userId: user._id,
+        label: 'أنا',
+        name: user.name,
+        phone: user.phone || '',
+        age: user.age || 0,
+        gender: user.gender || 'male',
+        relationship: 'self',
+        isDefault: true
+      });
+    } catch (err) {
+      console.error('Error auto-creating default SavedPatient:', err);
+    }
+
     const tokens = generateTokens(user._id, 'patient');
 
     res.status(201).json({

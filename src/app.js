@@ -63,6 +63,8 @@ const techRoutes = require('./routes/technician.routes');
 const adminRoutes = require('./routes/admin.routes');
 const uploadRoutes = require('./routes/upload.routes');
 const profileRoutes = require('./routes/profile.routes');
+const savedPatientRoutes = require('./routes/savedPatient.routes');
+const savedAddressRoutes = require('./routes/savedAddress.routes');
 
 // Mount routes
 app.use('/api/v1/auth', authRoutes);
@@ -72,6 +74,8 @@ app.use('/api/v1/technician', techRoutes);
 app.use('/api/v1/admin', adminRoutes);
 app.use('/api/v1/upload', uploadRoutes);
 app.use('/api/v1/profile', profileRoutes);
+app.use('/api/v1/patients/saved', savedPatientRoutes);
+app.use('/api/v1/addresses/saved', savedAddressRoutes);
 
 // Catch-all route for unmatched paths (404)
 app.use((req, res, next) => {

@@ -10,7 +10,7 @@ const app = express();
 // Trust reverse proxy (required for Vercel & express-rate-limit)
 app.set('trust proxy', 1);
 
-// Standard middlewares
+// Standard middlewaress
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, postman, curl)

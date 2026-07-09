@@ -15,8 +15,8 @@ exports.listSavedPatients = async (req, res, next) => {
           userId: req.user.id,
           label: 'أنا',
           name: user.name,
-          phone: user.phone || '',
-          age: user.age || 0,
+          phone: user.phone || '01000000000',
+          age: user.age || 30,
           gender: user.gender || 'male',
           relationship: 'self',
           isDefault: true

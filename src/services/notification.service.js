@@ -81,6 +81,47 @@ exports.notifyTechniciansNewOrder = async (order) => {
   }
 };
 
+// 1b. Notify single assigned technician about new order
+exports.notifyTechnicianNewOrder = async (order) => {
+  try {
+    if (!order.technician) return;
+    const tech = await Technician.findById(order.technician);
+    if (!tech) return;
+
+    await sendNotification({
+      recipientId: tech._id,
+      recipientModel: 'Technician',
+      type: 'new_order',
+      titleAr: 'تم تعيين طلب جديد لك',
+      bodyAr: `تم تعيين طلب جديد لك برقم ${order.orderNumber} من قبل الإدارة.`,
+      orderId: order._id,
+      fcmToken: tech.fcmToken
+    });
+  } catch (error) {
+    console.error('Error notifying technician of new order:', error.message);
+  }
+};
+
+// 1c. Notify patient that their prescription-only order was priced & accepted
+exports.notifyPatientOrderAccepted = async (order) => {
+  try {
+    const patient = await User.findById(order.patient);
+    if (!patient) return;
+
+    await sendNotification({
+      recipientId: patient._id,
+      recipientModel: 'User',
+      type: 'order_accepted',
+      titleAr: 'تم تسعير طلبك وقبوله',
+      bodyAr: `تم تسعير الفحوصات لطلبك برقم ${order.orderNumber} من قبل الإدارة. يرجى مراجعة التفاصيل.`,
+      orderId: order._id,
+      fcmToken: patient.fcmToken
+    });
+  } catch (error) {
+    console.error('Error notifying patient of accepted order:', error.message);
+  }
+};
+
 // 2. Notify patient that a technician accepted their order
 exports.notifyPatientTechAssigned = async (order) => {
   try {

@@ -20,6 +20,19 @@ router.put('/technicians/:id/toggle-active', adminController.toggleTechnicianAct
 router.get('/patients', adminController.getAllPatients);
 router.put('/pricing', adminController.editPricingConfig);
 
+// Pricing and Approval updates
+router.patch('/orders/:id/price-prescription', adminController.pricePrescription);
+router.patch('/orders/:id/approve-results', adminController.approveResults);
+router.patch('/orders/:id/payment', adminController.updateOrderPayment);
+
+// Complaints Management
+router.get('/complaints', adminController.getComplaintsList);
+router.patch('/complaints/:id/status', adminController.updateComplaintStatus);
+
+// System Settings Management
+router.get('/settings', adminController.getSystemSettings);
+router.patch('/settings', adminController.updateSystemSettings);
+
 // Service Catalog Management
 router.post('/services', adminController.createService);
 router.put('/services/reorder', adminController.reorderServices);

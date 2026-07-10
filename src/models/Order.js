@@ -102,6 +102,7 @@ const orderSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: [
+        'pending_review',
         'pending',
         'accepted',
         'assigned',
@@ -139,7 +140,10 @@ const orderSchema = new mongoose.Schema(
     },
     technicianRating: { type: Number, min: 1, max: 5 },
     technicianReview: String,
-    cancelReason: String
+    cancelReason: String,
+    isResultsApproved: { type: Boolean, default: false },
+    cancellationFeeApplied: { type: Boolean, default: false },
+    needsPricing: { type: Boolean, default: false }
   },
   {
     timestamps: true

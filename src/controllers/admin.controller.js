@@ -749,3 +749,263 @@ exports.reorderServices = async (req, res, next) => {
   }
 };
 
+// 20. Price Prescription Only Order
+exports.pricePrescription = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { serviceIds, customPrice, transferFee, notes } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'الطلب غير موجود',
+        statusCode: 404
+      });
+    }
+
+    // Fetch details for services
+    const servicesList = [];
+    let calculatedTotal = 0;
+
+    if (serviceIds && serviceIds.length > 0) {
+      for (const sId of serviceIds) {
+        const dbService = await Service.findById(sId);
+        if (dbService) {
+          servicesList.push({
+            serviceId: dbService._id,
+            nameAr: dbService.nameAr,
+            nameEn: dbService.nameEn,
+            price: dbService.price
+          });
+          calculatedTotal += dbService.price;
+        }
+      }
+    }
+
+    order.services = servicesList;
+    order.pricing.servicesTotal = calculatedTotal;
+    order.pricing.transferFee = transferFee !== undefined ? transferFee : order.pricing.transferFee;
+    order.pricing.total = customPrice !== undefined ? customPrice : (calculatedTotal + order.pricing.transferFee);
+    order.needsPricing = false;
+    order.status = 'accepted';
+    if (notes) {
+      order.caseDetails.notes = notes;
+    }
+
+    order.statusHistory.push({
+      status: 'accepted',
+      timestamp: new Date(),
+      updatedBy: req.user.id,
+      updatedByModel: 'Admin',
+      note: 'تم تسعير الروشتة وتأكيد الطلب من قبل الإدارة'
+    });
+
+    await order.save();
+
+    // Send notification to patient
+    try {
+      await notificationService.notifyPatientOrderAccepted(order);
+    } catch (err) {
+      console.error('Failed to notify patient of accepted order:', err);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تسعير الروشتة وتأكيد الطلب بنجاح',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 21. Approve Scan Results
+exports.approveResults = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { approve } = req.body; // boolean
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'الطلب غير موجود',
+        statusCode: 404
+      });
+    }
+
+    order.isResultsApproved = approve !== undefined ? approve : true;
+    await order.save();
+
+    if (order.isResultsApproved) {
+      // Trigger FCM notify to patient that reports/results are ready
+      try {
+        await notificationService.notifyPatientReportReady(order);
+      } catch (err) {
+        console.error('Failed to send report ready notification:', err);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: order.isResultsApproved ? 'تم نشر نتائج الفحص للمريض بنجاح' : 'تم حجب نتائج الفحص بنجاح',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 22. Update Order Payment
+exports.updateOrderPayment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { paymentStatus, paymentMethod } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'الطلب غير موجود',
+        statusCode: 404
+      });
+    }
+
+    if (paymentStatus) {
+      order.payment.status = paymentStatus;
+      if (paymentStatus === 'paid') {
+        order.payment.paidAt = new Date();
+      }
+    }
+    if (paymentMethod) {
+      order.payment.method = paymentMethod;
+    }
+
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث تفاصيل الدفع بنجاح',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 23. Get Complaints List
+exports.getComplaintsList = async (req, res, next) => {
+  try {
+    const Complaint = require('../models/Complaint');
+    const { status, role } = req.query;
+    const query = {};
+
+    if (status) {
+      query.status = status;
+    }
+    if (role) {
+      query.senderModel = role === 'patient' ? 'User' : 'Technician';
+    }
+
+    const complaints = await Complaint.find(query)
+      .populate({
+        path: 'orderId',
+        select: 'orderNumber status patientSnapshot services pricing'
+      })
+      .populate({
+        path: 'sender',
+        select: 'name phone email'
+      })
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع قائمة الشكاوى بنجاح',
+      data: complaints
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 24. Update Complaint Status
+exports.updateComplaintStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const Complaint = require('../models/Complaint');
+    const complaint = await Complaint.findById(id);
+    if (!complaint) {
+      return res.status(404).json({
+        success: false,
+        message: 'الشكوى غير موجودة',
+        statusCode: 404
+      });
+    }
+
+    complaint.status = status;
+    await complaint.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث حالة الشكوى بنجاح',
+      data: complaint
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 25. Get System Settings
+exports.getSystemSettings = async (req, res, next) => {
+  try {
+    const SystemSettings = require('../models/SystemSettings');
+    let settings = await SystemSettings.findOne();
+    if (!settings) {
+      settings = await SystemSettings.create({
+        defaultTransferFee: 150,
+        emergencyExtraFee: 150,
+        cancellationPolicyAr: 'لقد تحرك فريق المركز بالفعل نحو موقعك. عند الإلغاء الآن سيتم فرض رسوم الانتقال وقدرها [FEE] جنيه.',
+        cancellationPolicyEn: 'The medical team has already started their trip to your location. Cancelling now will incur a transfer fee of [FEE] EGP.'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع الإعدادات بنجاح',
+      data: settings
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 26. Update System Settings
+exports.updateSystemSettings = async (req, res, next) => {
+  try {
+    const { defaultTransferFee, emergencyExtraFee, cancellationPolicyAr, cancellationPolicyEn } = req.body;
+    const SystemSettings = require('../models/SystemSettings');
+    let settings = await SystemSettings.findOne();
+    if (!settings) {
+      settings = new SystemSettings({});
+    }
+
+    if (defaultTransferFee !== undefined) settings.defaultTransferFee = defaultTransferFee;
+    if (emergencyExtraFee !== undefined) settings.emergencyExtraFee = emergencyExtraFee;
+    if (cancellationPolicyAr !== undefined) settings.cancellationPolicyAr = cancellationPolicyAr;
+    if (cancellationPolicyEn !== undefined) settings.cancellationPolicyEn = cancellationPolicyEn;
+
+    await settings.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث الإعدادات بنجاح',
+      data: settings
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+

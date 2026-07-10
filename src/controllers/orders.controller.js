@@ -31,7 +31,9 @@ exports.createOrder = async (req, res, next) => {
       paymentMethod
     } = req.body;
 
-    if (!serviceCategory || !serviceIds || serviceIds.length === 0 || !location || !schedule) {
+    const isPrescriptionOnly = serviceCategory === 'prescription_only';
+
+    if (!serviceCategory || (!isPrescriptionOnly && (!serviceIds || serviceIds.length === 0)) || !location || !schedule) {
       return res.status(400).json({
         success: false,
         message: 'بيانات الطلب غير مكتملة',
@@ -52,10 +54,30 @@ exports.createOrder = async (req, res, next) => {
     }
 
     // Server-side Pricing calculation
-    const pricingBreakdown = await pricingService.calculateOrderPrice(
-      serviceIds,
-      schedule.isEmergency
-    );
+    let pricingBreakdown = { servicesList: [], servicesTotal: 0, transferFee: 0, emergencyFee: 0, total: 0 };
+    if (!isPrescriptionOnly) {
+      pricingBreakdown = await pricingService.calculateOrderPrice(
+        serviceIds,
+        schedule.isEmergency
+      );
+    } else {
+      // Get default transfer fee from settings
+      try {
+        const SystemSettings = require('../models/SystemSettings');
+        const settings = await SystemSettings.findOne();
+        if (settings) {
+          pricingBreakdown.transferFee = settings.defaultTransferFee;
+          pricingBreakdown.total = settings.defaultTransferFee;
+        } else {
+          pricingBreakdown.transferFee = 150;
+          pricingBreakdown.total = 150;
+        }
+      } catch (err) {
+        console.error('Error fetching settings for transfer fee:', err);
+        pricingBreakdown.transferFee = 150;
+        pricingBreakdown.total = 150;
+      }
+    }
 
     // Order number
     const orderNumber = await generateOrderNumber();
@@ -119,21 +141,23 @@ exports.createOrder = async (req, res, next) => {
         method: paymentMethod || 'cash',
         status: 'pending'
       },
-      status: 'pending',
+      status: isPrescriptionOnly ? 'pending_review' : 'pending',
+      needsPricing: isPrescriptionOnly,
       statusHistory: [
         {
-          status: 'pending',
+          status: isPrescriptionOnly ? 'pending_review' : 'pending',
           timestamp: new Date(),
           updatedBy: patientId,
           updatedByModel: 'User',
-          note: 'تم استلام الطلب وبانتظار المراجعة والقبول'
+          note: isPrescriptionOnly ? 'تم رفع الروشتة وبانتظار المراجعة والتسعير من الإدارة' : 'تم استلام الطلب وبانتظار المراجعة والقبول'
         }
       ]
     });
 
-    // Notify administrators / nearby technicians
-    // (Mock notifications for Phase 1 are logged internally to DB/Console)
-    await notificationService.notifyTechniciansNewOrder(order);
+    // Notify administrators / nearby technicians (only for regular bookings)
+    if (!isPrescriptionOnly) {
+      await notificationService.notifyTechniciansNewOrder(order);
+    }
 
     res.status(201).json({
       success: true,
@@ -169,10 +193,23 @@ exports.getOrderHistory = async (req, res, next) => {
       .skip(skip)
       .limit(limit);
 
+    // Mask report files if not approved
+    const filteredOrders = orders.map(order => {
+      const orderObj = order.toObject();
+      if (!orderObj.isResultsApproved) {
+        orderObj.report = {
+          images: [],
+          pdf: null,
+          notes: 'جاري مراجعة وكتابة التقرير النهائي من قبل الإدارة وسوف يظهر هنا فور اعتماده.'
+        };
+      }
+      return orderObj;
+    });
+
     res.status(200).json({
       success: true,
       message: 'تم استرجاع سجل الطلبات بنجاح',
-      data: orders,
+      data: filteredOrders,
       pagination: {
         page,
         limit,
@@ -223,10 +260,20 @@ exports.getOrderDetail = async (req, res, next) => {
       });
     }
 
+    // Mask report files if patient is querying and results are not approved
+    const orderData = order.toObject();
+    if (role === 'patient' && !orderData.isResultsApproved) {
+      orderData.report = {
+        images: [],
+        pdf: null,
+        notes: 'جاري مراجعة وكتابة التقرير النهائي من قبل الإدارة وسوف يظهر هنا فور اعتماده.'
+      };
+    }
+
     res.status(200).json({
       success: true,
       message: 'تم استرجاع تفاصيل الطلب بنجاح',
-      data: order
+      data: orderData
     });
   } catch (error) {
     next(error);
@@ -271,7 +318,16 @@ exports.cancelOrder = async (req, res, next) => {
       });
     }
 
-    // Cancel order
+    // Cancel order & apply dynamic cancellation fee if team has moved (on_way)
+    let note = `تم إلغاء الطلب من قبل المريض. السبب: ${cancelReason || 'إلغاء من قبل المريض'}`;
+    if (order.status === 'on_way') {
+      order.cancellationFeeApplied = true;
+      order.pricing.total = order.pricing.transferFee || 150;
+      order.pricing.servicesTotal = 0;
+      order.pricing.emergencyFee = 0;
+      note = `تم إلغاء الطلب من قبل المريض بعد تحرك المركز. تم تطبيق رسوم إلغاء بقيمة ${order.pricing.total} جنيه. السبب: ${cancelReason || 'إلغاء من قبل المريض'}`;
+    }
+
     order.status = 'cancelled';
     order.cancelReason = cancelReason || 'إلغاء من قبل المريض';
     order.statusHistory.push({
@@ -279,7 +335,7 @@ exports.cancelOrder = async (req, res, next) => {
       timestamp: new Date(),
       updatedBy: patientId,
       updatedByModel: 'User',
-      note: `تم إلغاء الطلب من قبل المريض. السبب: ${order.cancelReason}`
+      note: note
     });
 
     await order.save();

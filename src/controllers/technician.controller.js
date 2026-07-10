@@ -297,7 +297,7 @@ exports.uploadReportResults = async (req, res, next) => {
   try {
     const { id } = req.params;
     const techId = req.user.id;
-    const { images, pdf, notes } = req.body;
+    const { images, pdf, notes, paymentStatus, paymentMethod } = req.body;
 
     const order = await Order.findById(id);
     if (!order || String(order.technician) !== String(techId)) {
@@ -316,6 +316,15 @@ exports.uploadReportResults = async (req, res, next) => {
       uploadedAt: new Date(),
       notes: notes || ''
     };
+
+    // Update payment details if provided
+    order.payment = order.payment || {};
+    if (paymentStatus) {
+      order.payment.status = paymentStatus;
+    }
+    if (paymentMethod) {
+      order.payment.method = paymentMethod;
+    }
 
     // Transition state from in_progress -> completed
     await updateOrderStatus(order, 'completed', techId, 'تم إنهاء تقديم الخدمة الطبية وجاري تجهيز التقرير النهائي');

@@ -321,6 +321,9 @@ exports.uploadReportResults = async (req, res, next) => {
     order.payment = order.payment || {};
     if (paymentStatus) {
       order.payment.status = paymentStatus;
+      if (paymentStatus === 'paid' || paymentStatus === 'completed') {
+        order.payment.paidAt = new Date();
+      }
     }
     if (paymentMethod) {
       order.payment.method = paymentMethod;

@@ -1,10 +1,12 @@
 const Order = require('../models/Order');
 const Technician = require('../models/Technician');
+const Service = require('../models/Service');
 const notificationService = require('../services/notification.service');
 
 // Status machine validation helper
 const isValidTransition = (currentStatus, newStatus) => {
   const allowedTransitions = {
+    pending_review: ['accepted', 'assigned', 'cancelled'],
     pending: ['accepted', 'assigned', 'cancelled'],
     accepted: ['assigned', 'cancelled'],
     assigned: ['on_way', 'cancelled'],
@@ -64,17 +66,17 @@ exports.getAvailableOrders = async (req, res, next) => {
       });
     }
 
-    // Find orders with status 'pending' or 'accepted' and no technician assigned in tech's region
+    // Find orders with status 'pending', 'accepted' or 'pending_review' and no technician assigned in tech's region
     // If region matches, or just general pending orders
     const query = {
-      status: { $in: ['pending', 'accepted'] },
+      status: { $in: ['pending', 'accepted', 'pending_review'] },
       technician: null,
       'location.district': tech.region // Filter by technician's active region
     };
 
     // If no district matches region, fallback to generic regional search
     const orders = await Order.find({
-      status: { $in: ['pending', 'accepted'] },
+      status: { $in: ['pending', 'accepted', 'pending_review'] },
       technician: null
     }).sort({ createdAt: -1 });
 
@@ -408,6 +410,77 @@ exports.toggleAvailability = async (req, res, next) => {
       data: {
         isAvailable: tech.isAvailable
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 6. Price/Setup Prescription Order by Technician
+exports.pricePrescription = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { serviceIds, customPrice, transferFee, notes } = req.body;
+
+    const order = await Order.findById(id);
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'الطلب غير موجود',
+        statusCode: 404
+      });
+    }
+
+    // Fetch details for services
+    const servicesList = [];
+    let calculatedTotal = 0;
+
+    if (serviceIds && serviceIds.length > 0) {
+      for (const sId of serviceIds) {
+        const dbService = await Service.findById(sId);
+        if (dbService) {
+          servicesList.push({
+            serviceId: dbService._id,
+            nameAr: dbService.nameAr,
+            nameEn: dbService.nameEn,
+            price: dbService.price
+          });
+          calculatedTotal += dbService.price;
+        }
+      }
+    }
+
+    order.services = servicesList;
+    order.pricing.servicesTotal = calculatedTotal;
+    order.pricing.transferFee = transferFee !== undefined ? transferFee : order.pricing.transferFee;
+    order.pricing.total = customPrice !== undefined ? customPrice : (calculatedTotal + order.pricing.transferFee);
+    order.needsPricing = false;
+    order.status = 'accepted';
+    if (notes) {
+      order.caseDetails.notes = notes;
+    }
+
+    order.statusHistory.push({
+      status: 'accepted',
+      timestamp: new Date(),
+      updatedBy: req.user.id,
+      updatedByModel: 'Technician',
+      note: 'تم تسعير الروشتة وتحديد الفحوصات من قبل الفني'
+    });
+
+    await order.save();
+
+    // Notify patient
+    try {
+      await notificationService.notifyPatientOrderAccepted(order);
+    } catch (err) {
+      console.error('Failed to notify patient of accepted order:', err);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تسعير الروشتة وتحديد الفحوصات بنجاح',
+      data: order
     });
   } catch (error) {
     next(error);

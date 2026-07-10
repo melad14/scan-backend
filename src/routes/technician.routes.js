@@ -16,6 +16,7 @@ router.put('/orders/:id/start-trip', technicianController.startTrip);
 router.put('/orders/:id/arrived', technicianController.arrivedAtLocation);
 router.put('/orders/:id/start-service', technicianController.startService);
 router.post('/orders/:id/upload-report', technicianController.uploadReportResults);
+router.patch('/orders/:id/price-prescription', technicianController.pricePrescription);
 
 router.put('/location', technicianController.updateLocation);
 router.put('/availability', technicianController.toggleAvailability);

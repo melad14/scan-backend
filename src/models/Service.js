@@ -29,6 +29,14 @@ const serviceSchema = new mongoose.Schema(
     description: {
       type: String,
       default: ''
+    },
+    instructionsAr: {
+      type: String,
+      default: ''
+    },
+    instructionsEn: {
+      type: String,
+      default: ''
     }
   },
   {

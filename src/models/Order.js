@@ -143,7 +143,8 @@ const orderSchema = new mongoose.Schema(
     cancelReason: String,
     isResultsApproved: { type: Boolean, default: false },
     cancellationFeeApplied: { type: Boolean, default: false },
-    needsPricing: { type: Boolean, default: false }
+    needsPricing: { type: Boolean, default: false },
+    instructionsAcknowledged: { type: Boolean, default: false }
   },
   {
     timestamps: true

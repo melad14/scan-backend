@@ -443,7 +443,7 @@ exports.editPricingConfig = async (req, res, next) => {
 // 11. Create a New Service
 exports.createService = async (req, res, next) => {
   try {
-    const { nameAr, nameEn, category, price, description, sortOrder } = req.body;
+    const { nameAr, nameEn, category, price, description, sortOrder, instructionsAr, instructionsEn } = req.body;
 
     if (!nameAr || !nameEn || !category || price === undefined) {
       return res.status(400).json({
@@ -466,6 +466,8 @@ exports.createService = async (req, res, next) => {
       category,
       price: Number(price),
       description: description || '',
+      instructionsAr: instructionsAr || '',
+      instructionsEn: instructionsEn || '',
       sortOrder: finalSortOrder,
       isActive: true
     });
@@ -484,7 +486,7 @@ exports.createService = async (req, res, next) => {
 exports.updateService = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { nameAr, nameEn, category, price, description, sortOrder, isActive } = req.body;
+    const { nameAr, nameEn, category, price, description, sortOrder, isActive, instructionsAr, instructionsEn } = req.body;
 
     const service = await Service.findById(id);
     if (!service) {
@@ -501,6 +503,8 @@ exports.updateService = async (req, res, next) => {
     if (category !== undefined) service.category = category;
     if (price !== undefined) service.price = Number(price);
     if (description !== undefined) service.description = description;
+    if (instructionsAr !== undefined) service.instructionsAr = instructionsAr;
+    if (instructionsEn !== undefined) service.instructionsEn = instructionsEn;
     if (sortOrder !== undefined) service.sortOrder = Number(sortOrder);
     if (isActive !== undefined) service.isActive = isActive;
 

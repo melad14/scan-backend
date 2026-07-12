@@ -143,6 +143,7 @@ exports.createOrder = async (req, res, next) => {
       },
       status: isPrescriptionOnly ? 'pending_review' : 'pending',
       needsPricing: isPrescriptionOnly,
+      instructionsAcknowledged: req.body.instructionsAcknowledged || false,
       statusHistory: [
         {
           status: isPrescriptionOnly ? 'pending_review' : 'pending',

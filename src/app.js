@@ -67,6 +67,7 @@ const savedPatientRoutes = require('./routes/savedPatient.routes');
 const savedAddressRoutes = require('./routes/savedAddress.routes');
 const categoryRoutes = require('./routes/category.routes');
 const complaintsRoutes = require('./routes/complaints.routes');
+const notificationsRoutes = require('./routes/notifications.routes');
 
 // Mount routes
 app.use('/api/v1/auth', authRoutes);
@@ -80,6 +81,7 @@ app.use('/api/v1/patients/saved', savedPatientRoutes);
 app.use('/api/v1/addresses/saved', savedAddressRoutes);
 app.use('/api/v1/categories', categoryRoutes);
 app.use('/api/v1/complaints', complaintsRoutes);
+app.use('/api/v1/notifications', notificationsRoutes);
 
 // Catch-all route for unmatched paths (404)
 app.use((req, res, next) => {

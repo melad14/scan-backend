@@ -47,7 +47,7 @@ const userSchema = new mongoose.Schema(
     },
     isVerified: {
       type: Boolean,
-      default: true // Email/username accounts are auto-verified
+      default: false
     },
     isActive: {
       type: Boolean,

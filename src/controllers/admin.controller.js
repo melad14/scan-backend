@@ -168,7 +168,7 @@ exports.assignTechnician = async (req, res, next) => {
     }
 
     // Trigger FCM to technician
-    await notificationService.notifyTechnicianNewOrder(order);
+    await notificationService.notifyTechnicianOrderAssigned(order);
     // Trigger FCM to patient
     await notificationService.notifyPatientTechAssigned(order);
 

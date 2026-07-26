@@ -50,6 +50,16 @@ exports.createComplaint = async (req, res, next) => {
       status: 'pending'
     });
 
+    // Notify technician if complaint was submitted by patient
+    if (senderModel === 'User' && order.technician) {
+      try {
+        const notificationService = require('../services/notification.service');
+        await notificationService.notifyTechnicianNewComplaint(order);
+      } catch (err) {
+        console.error('Failed to notify technician of complaint:', err);
+      }
+    }
+
     res.status(201).json({
       success: true,
       message: 'تم تسجيل الشكوى بنجاح وسيتم مراجعتها من قبل الإدارة',

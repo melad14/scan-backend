@@ -1,6 +1,7 @@
 const Order = require('../models/Order');
 const Technician = require('../models/Technician');
 const Service = require('../models/Service');
+const Notification = require('../models/Notification');
 const notificationService = require('../services/notification.service');
 
 // Status machine validation helper
@@ -481,6 +482,188 @@ exports.pricePrescription = async (req, res, next) => {
       success: true,
       message: 'تم تسعير الروشتة وتحديد الفحوصات بنجاح',
       data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Set Technician Arrival Time
+exports.setArrivalTime = async (req, res, next) => {
+  try {
+    const { arrivalTime } = req.body;
+
+    if (!arrivalTime || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(arrivalTime)) {
+      return res.status(400).json({
+        success: false,
+        message: 'صيغة الوقت غير صحيحة، يجب أن تكون بصيغة HH:mm (مثال: 10:30)',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'لم يتم العثور على الطلب',
+        code: 'ORDER_NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    if (!order.technician || order.technician.toString() !== req.user.id) {
+      return res.status(403).json({
+        success: false,
+        message: 'غير مصرح لك بتعديل هذا الطلب',
+        code: 'FORBIDDEN',
+        statusCode: 403
+      });
+    }
+
+    if (!['accepted', 'assigned'].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'يمكن تحديد وقت الوصول فقط للطلبات المقبولة أو المعيّنة',
+        code: 'INVALID_STATUS',
+        statusCode: 400
+      });
+    }
+
+    // Slot boundary validation (unless emergency)
+    const isEmergency = order.schedule && order.schedule.isEmergency;
+    if (!isEmergency) {
+      const [hours, minutes] = arrivalTime.split(':').map(Number);
+      const totalMinutes = hours * 60 + minutes;
+
+      const slotBoundaries = {
+        morning_9_12: { start: 9 * 60, end: 12 * 60, label: '09:00 – 12:00' },
+        afternoon_12_3: { start: 12 * 60, end: 15 * 60, label: '12:00 – 15:00' },
+        evening_3_6: { start: 15 * 60, end: 18 * 60, label: '15:00 – 18:00' }
+      };
+
+      const slot = order.schedule ? order.schedule.timeSlot : null;
+      const bounds = slotBoundaries[slot];
+
+      if (bounds && (totalMinutes < bounds.start || totalMinutes > bounds.end)) {
+        return res.status(400).json({
+          success: false,
+          message: `وقت الوصول يجب أن يكون ضمن الفترة المحجوزة للطلب (${bounds.label})`,
+          code: 'OUT_OF_BOUNDS',
+          statusCode: 400
+        });
+      }
+    }
+
+    order.schedule = order.schedule || {};
+    order.schedule.technicianArrivalTime = arrivalTime;
+
+    order.statusHistory.push({
+      status: order.status,
+      timestamp: new Date(),
+      updatedBy: req.user.id,
+      updatedByModel: 'Technician',
+      note: `تم تحديد وقت الوصول: ${arrivalTime}`
+    });
+
+    await order.save();
+
+    // Send FCM push notification to patient
+    try {
+      await notificationService.notifyPatientArrivalTimeSet(order, arrivalTime);
+    } catch (err) {
+      console.error('Failed to send arrival time FCM notification:', err);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديد وقت الوصول بنجاح',
+      data: order
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get Technician Notifications
+exports.getNotifications = async (req, res, next) => {
+  try {
+    const techId = req.user.id;
+
+    const notifications = await Notification.find({
+      recipient: techId,
+      recipientModel: 'Technician'
+    })
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    const unreadCount = await Notification.countDocuments({
+      recipient: techId,
+      recipientModel: 'Technician',
+      isRead: false
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'تم استرجاع الإشعارات بنجاح',
+      data: {
+        notifications,
+        unreadCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Mark single notification as read
+exports.markNotificationRead = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const techId = req.user.id;
+
+    const notification = await Notification.findOne({
+      _id: id,
+      recipient: techId,
+      recipientModel: 'Technician'
+    });
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: 'الإشعار غير موجود',
+        code: 'NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    notification.isRead = true;
+    await notification.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث حالة الإشعار إلى مقروء',
+      data: notification
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Mark all notifications as read
+exports.markAllNotificationsRead = async (req, res, next) => {
+  try {
+    const techId = req.user.id;
+
+    await Notification.updateMany(
+      { recipient: techId, recipientModel: 'Technician', isRead: false },
+      { isRead: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تحديث جميع الإشعارات كمقروءة'
     });
   } catch (error) {
     next(error);

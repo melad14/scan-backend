@@ -4,9 +4,11 @@ const authController = require('../controllers/auth.controller');
 const { protect } = require('../middleware/auth.middleware');
 const { authLimiter } = require('../middleware/rateLimiter');
 
-// ─── Patient Auth (Username + Password) ──────────────────────────────────────
+// ─── Patient Auth (Username + Password & Email OTP Verification) ───────────────
 router.post('/patient/register', authLimiter, authController.registerPatient);
 router.post('/patient/login', authLimiter, authController.loginPatient);
+router.post('/verify-email', authLimiter, authController.verifyEmail);
+router.post('/resend-verification', authLimiter, authController.resendVerification);
 
 // ─── Technician Auth (Phone + Password) ──────────────────────────────────────
 router.post('/technician/login', authLimiter, authController.loginTechnician);

@@ -5,6 +5,9 @@ const User = require('../models/User');
 const Technician = require('../models/Technician');
 const Admin = require('../models/Admin');
 const OtpLog = require('../models/OtpLog');
+const emailService = require('../services/emailService');
+
+const generateNumericOtp = () => Math.floor(100000 + Math.random() * 900000).toString();
 
 let twilioClient;
 if (env.twilio.accountSid && env.twilio.authToken && env.twilio.accountSid !== 'mock') {
@@ -121,7 +124,7 @@ exports.registerPatient = async (req, res, next) => {
       age: parseInt(age, 10),
       gender,
       passwordHash,
-      isVerified: true,
+      isVerified: false,
       isActive: true
     });
 
@@ -142,22 +145,26 @@ exports.registerPatient = async (req, res, next) => {
       console.error('Error auto-creating default SavedPatient:', err);
     }
 
-    const tokens = generateTokens(user._id, 'patient');
+    // Generate 6-digit OTP code & save to OtpLog
+    const otpCode = generateNumericOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+    await OtpLog.create({
+      identifier: user.email,
+      code: otpCode,
+      type: 'email_verification',
+      expiresAt
+    });
+
+    // Send OTP email via emailService
+    await emailService.sendOtpEmail(user.email, otpCode);
 
     res.status(201).json({
       success: true,
-      message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح',
+      message: 'تم إنشاء الحساب بنجاح. يرجى إدخال رمز التحقق المرسل إلى بريدك الإلكتروني.',
       data: {
-        user: {
-          id: user._id,
-          username: user.username,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          age: user.age,
-          gender: user.gender
-        },
-        ...tokens
+        userId: user._id,
+        email: user.email
       }
     });
   } catch (error) {
@@ -219,6 +226,20 @@ exports.loginPatient = async (req, res, next) => {
       });
     }
 
+    // Check if user email is verified
+    if (!user.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'البريد الإلكتروني غير مفعّل. يرجى تفعيل حسابك أولاً.',
+        code: 'EMAIL_NOT_VERIFIED',
+        statusCode: 403,
+        data: {
+          userId: user._id,
+          email: user.email
+        }
+      });
+    }
+
     const tokens = generateTokens(user._id, 'patient');
 
     res.status(200).json({
@@ -235,6 +256,174 @@ exports.loginPatient = async (req, res, next) => {
         },
         ...tokens
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 3. Verify Email OTP
+exports.verifyEmail = async (req, res, next) => {
+  try {
+    const { userId, otp } = req.body;
+
+    if (!userId || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'معرف المستخدم ورمز التحقق مطلوبان',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود',
+        code: 'USER_NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    if (user.isVerified) {
+      const tokens = generateTokens(user._id, 'patient');
+      return res.status(200).json({
+        success: true,
+        message: 'الحساب مفعّل بالفعل',
+        data: {
+          user: {
+            id: user._id,
+            username: user.username,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            age: user.age,
+            gender: user.gender
+          },
+          ...tokens
+        }
+      });
+    }
+
+    // Find valid unexpired OTP log
+    const otpLog = await OtpLog.findOne({
+      identifier: user.email,
+      code: otp.toString().trim(),
+      type: 'email_verification',
+      isUsed: false,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!otpLog) {
+      return res.status(400).json({
+        success: false,
+        message: 'رمز التحقق غير صحيح أو منتهي الصلاحية',
+        code: 'INVALID_OTP',
+        statusCode: 400
+      });
+    }
+
+    // Update user status
+    user.isVerified = true;
+    await user.save();
+
+    // Clean up used OTP log
+    await OtpLog.deleteMany({ identifier: user.email, type: 'email_verification' });
+
+    // Generate login tokens
+    const tokens = generateTokens(user._id, 'patient');
+
+    res.status(200).json({
+      success: true,
+      message: 'تم تفعيل الحساب وتسجيل الدخول بنجاح',
+      data: {
+        user: {
+          id: user._id,
+          username: user.username,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          age: user.age,
+          gender: user.gender
+        },
+        ...tokens
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 4. Resend Verification OTP
+exports.resendVerification = async (req, res, next) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'معرف المستخدم مطلوب',
+        code: 'VALIDATION_ERROR',
+        statusCode: 400
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود',
+        code: 'USER_NOT_FOUND',
+        statusCode: 404
+      });
+    }
+
+    if (user.isVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'الحساب مفعّل بالفعل',
+        code: 'ALREADY_VERIFIED',
+        statusCode: 400
+      });
+    }
+
+    // Rate limit check: 1 minute
+    const recentLog = await OtpLog.findOne({
+      identifier: user.email,
+      type: 'email_verification',
+      createdAt: { $gt: new Date(Date.now() - 60 * 1000) }
+    });
+
+    if (recentLog) {
+      return res.status(429).json({
+        success: false,
+        message: 'يرجى الانتظار دقيقة واحدة قبل طلب رمز جديد',
+        code: 'RATE_LIMIT_EXCEEDED',
+        statusCode: 429
+      });
+    }
+
+    // Clear old unexpired logs
+    await OtpLog.deleteMany({ identifier: user.email, type: 'email_verification' });
+
+    // Generate new 6-digit OTP
+    const otpCode = generateNumericOtp();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await OtpLog.create({
+      identifier: user.email,
+      code: otpCode,
+      type: 'email_verification',
+      expiresAt
+    });
+
+    // Send email
+    await emailService.sendOtpEmail(user.email, otpCode);
+
+    res.status(200).json({
+      success: true,
+      message: 'تم إعادة إرسال رمز التحقق إلى بريدك الإلكتروني بنجاح'
     });
   } catch (error) {
     next(error);

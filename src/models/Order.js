@@ -76,7 +76,8 @@ const orderSchema = new mongoose.Schema(
         type: String,
         enum: ['morning_9_12', 'afternoon_12_3', 'evening_3_6']
       },
-      isEmergency: { type: Boolean, default: false }
+      isEmergency: { type: Boolean, default: false },
+      technicianArrivalTime: { type: String, default: null }
     },
     pricing: {
       servicesTotal: Number,

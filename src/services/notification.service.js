@@ -222,3 +222,65 @@ exports.notifyTechnicianOrderCancelled = async (order) => {
     console.error('Error notifying technician:', error.message);
   }
 };
+
+// 7. Notify patient when technician sets arrival time
+exports.notifyPatientArrivalTimeSet = async (order, arrivalTime) => {
+  try {
+    const patient = await User.findById(order.patient);
+    if (!patient) return;
+
+    await sendNotification({
+      recipientId: patient._id,
+      recipientModel: 'User',
+      type: 'arrival_time_set',
+      titleAr: 'تم تحديد موعد الفني',
+      bodyAr: `سيصل الفني إليك الساعة ${arrivalTime}`,
+      orderId: order._id,
+      fcmToken: patient.fcmToken
+    });
+  } catch (error) {
+    console.error('Error notifying patient arrival time:', error.message);
+  }
+};
+
+// 8. Notify technician when order is assigned by admin
+exports.notifyTechnicianOrderAssigned = async (order) => {
+  try {
+    if (!order.technician) return;
+    const tech = await Technician.findById(order.technician);
+    if (!tech) return;
+
+    await sendNotification({
+      recipientId: tech._id,
+      recipientModel: 'Technician',
+      type: 'order_assigned',
+      titleAr: 'تم تعيين طلب جديد لك',
+      bodyAr: `تم تعيين الطلب رقم ${order.orderNumber} لك من قبل الإدارة.`,
+      orderId: order._id,
+      fcmToken: tech.fcmToken
+    });
+  } catch (error) {
+    console.error('Error notifying technician of assigned order:', error.message);
+  }
+};
+
+// 9. Notify technician when patient submits a complaint
+exports.notifyTechnicianNewComplaint = async (order) => {
+  try {
+    if (!order.technician) return;
+    const tech = await Technician.findById(order.technician);
+    if (!tech) return;
+
+    await sendNotification({
+      recipientId: tech._id,
+      recipientModel: 'Technician',
+      type: 'new_complaint',
+      titleAr: 'شكوى جديدة على الطلب',
+      bodyAr: `تم تقديم شكوى جديدة بخصوص الطلب رقم ${order.orderNumber}.`,
+      orderId: order._id,
+      fcmToken: tech.fcmToken
+    });
+  } catch (error) {
+    console.error('Error notifying technician of complaint:', error.message);
+  }
+};

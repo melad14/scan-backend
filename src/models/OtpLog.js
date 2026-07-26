@@ -2,14 +2,24 @@ const mongoose = require('mongoose');
 
 const otpLogSchema = new mongoose.Schema(
   {
+    identifier: {
+      type: String,
+      trim: true
+    },
+    code: {
+      type: String,
+      trim: true
+    },
+    type: {
+      type: String,
+      default: 'email_verification'
+    },
     phone: {
       type: String,
-      required: [true, 'رقم الهاتف مطلوب'],
       trim: true
     },
     otpHash: {
-      type: String,
-      required: [true, 'الرمز المشفر مطلوب']
+      type: String
     },
     expiresAt: {
       type: Date,
@@ -31,5 +41,6 @@ const otpLogSchema = new mongoose.Schema(
 
 // TTL Index to automatically delete expired OTPs
 otpLogSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+otpLogSchema.index({ identifier: 1, type: 1 });
 
 module.exports = mongoose.model('OtpLog', otpLogSchema);

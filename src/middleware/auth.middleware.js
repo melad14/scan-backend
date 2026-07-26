@@ -43,6 +43,15 @@ const protect = async (req, res, next) => {
         });
       }
 
+      if (decoded.role === 'patient' && dbUser.isVerified === false) {
+        return res.status(403).json({
+          success: false,
+          message: 'البريد الإلكتروني غير مفعّل. يرجى تفعيل حسابك أولاً.',
+          code: 'EMAIL_NOT_VERIFIED',
+          statusCode: 403
+        });
+      }
+
       next();
     } catch (error) {
       console.error(error);

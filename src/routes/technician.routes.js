@@ -12,6 +12,7 @@ router.get('/orders/active', technicianController.getActiveOrder);
 router.get('/orders/history', technicianController.getCompletedOrdersHistory);
 
 router.put('/orders/:id/accept', technicianController.acceptOrder);
+router.put('/orders/:id/set-arrival-time', technicianController.setArrivalTime);
 router.put('/orders/:id/start-trip', technicianController.startTrip);
 router.put('/orders/:id/arrived', technicianController.arrivedAtLocation);
 router.put('/orders/:id/start-service', technicianController.startService);
@@ -20,5 +21,10 @@ router.patch('/orders/:id/price-prescription', technicianController.pricePrescri
 
 router.put('/location', technicianController.updateLocation);
 router.put('/availability', technicianController.toggleAvailability);
+
+// Notifications
+router.get('/notifications', technicianController.getNotifications);
+router.patch('/notifications/read-all', technicianController.markAllNotificationsRead);
+router.patch('/notifications/:id/read', technicianController.markNotificationRead);
 
 module.exports = router;

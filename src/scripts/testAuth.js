@@ -102,25 +102,49 @@ const runTests = async () => {
       passed = false;
     }
 
-    console.log('\n--- Test 4: Patient Registration ---');
+    console.log('\n--- Test 4: Patient Registration & Email OTP Verification ---');
     const reqReg = {
       body: {
         username: 'testuser',
         name: 'المريض التجريبي',
         email: 'test@scango.com',
+        phone: '01011112222',
+        age: 30,
+        gender: 'male',
         password: 'testpassword'
       }
     };
     const resReg = mockRes();
     await authController.registerPatient(reqReg, resReg);
 
-    let patientAccessToken;
-    if (resReg.statusCode === 201 && resReg.body.data.accessToken) {
-      console.log('✅ Patient Registration completed successfully and JWT token returned!');
-      patientAccessToken = resReg.body.data.accessToken;
+    let patientUserId;
+    if (resReg.statusCode === 201 && resReg.body.data.userId) {
+      console.log('✅ Patient Registration completed successfully and returned userId for verification!');
+      patientUserId = resReg.body.data.userId;
     } else {
       console.log('❌ Patient registration failed:', resReg.body);
       passed = false;
+    }
+
+    if (patientUserId) {
+      // Find created OTP log
+      const otpLog = await OtpLog.findOne({ identifier: 'test@scango.com', type: 'email_verification' });
+      if (otpLog && otpLog.code) {
+        console.log(`Found OTP code for verification: ${otpLog.code}`);
+        const reqVerifyEmail = { body: { userId: patientUserId, otp: otpLog.code } };
+        const resVerifyEmail = mockRes();
+        await authController.verifyEmail(reqVerifyEmail, resVerifyEmail);
+
+        if (resVerifyEmail.statusCode === 200 && resVerifyEmail.body.data.accessToken) {
+          console.log('✅ Email OTP verification verified successfully!');
+        } else {
+          console.log('❌ Email OTP verification failed:', resVerifyEmail.body);
+          passed = false;
+        }
+      } else {
+        console.log('❌ OtpLog record not created for registered email!');
+        passed = false;
+      }
     }
 
     console.log('\n--- Test 5: Patient Login ---');
@@ -134,7 +158,7 @@ const runTests = async () => {
     await authController.loginPatient(reqLogin, resLogin);
 
     if (resLogin.statusCode === 200 && resLogin.body.data.accessToken) {
-      console.log('✅ Patient login verified!');
+      console.log('✅ Verified patient login succeeded!');
     } else {
       console.log('❌ Patient login failed:', resLogin.body);
       passed = false;

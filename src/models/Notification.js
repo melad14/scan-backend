@@ -15,12 +15,16 @@ const notificationSchema = new mongoose.Schema(
     type: {
       type: String,
       enum: [
+        'new_order',
         'order_accepted',
         'tech_assigned',
         'tech_on_way',
         'tech_arrived',
         'report_ready',
-        'order_cancelled'
+        'order_cancelled',
+        'arrival_time_set',
+        'order_assigned',
+        'new_complaint'
       ],
       required: true
     },

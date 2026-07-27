@@ -59,11 +59,19 @@ const sendNotification = async ({
 exports.notifyTechniciansNewOrder = async (order) => {
   try {
     const district = (order.location.district || 'Cairo').trim();
-    const technicians = await Technician.find({
+    let technicians = await Technician.find({
       region: { $regex: new RegExp('^' + district.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&') + '$', 'i') },
       isActive: true,
       isAvailable: true
     });
+
+    if (technicians.length === 0) {
+      console.log(`[FCM FALLBACK] No technicians found in district "${district}". Fetching all active & available technicians.`);
+      technicians = await Technician.find({
+        isActive: true,
+        isAvailable: true
+      });
+    }
 
     for (const tech of technicians) {
       await sendNotification({
@@ -71,7 +79,7 @@ exports.notifyTechniciansNewOrder = async (order) => {
         recipientModel: 'Technician',
         type: 'new_order', // Generic trigger key
         titleAr: 'طلب خدمة جديد متاح',
-        bodyAr: `هناك طلب جديد في منطقتك برقم ${order.orderNumber}، اضغط للتفاصيل`,
+        bodyAr: `هناك طلب جديد متاح برقم ${order.orderNumber}، اضغط للتفاصيل`,
         orderId: order._id,
         fcmToken: tech.fcmToken
       });

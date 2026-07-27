@@ -33,13 +33,14 @@ const getTransporter = () => {
  */
 exports.sendOtpEmail = async (toEmail, otpCode) => {
   const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@scango.app';
+  const fromDisplay = `"سكان جو | ScanGo" <${fromEmail}>`;
   const transporter = getTransporter();
 
   // Console log OTP code for easy development / debugging when SMTP is not configured
   console.log(`[ScanGo OTP Email] Target: ${toEmail} | Code: ${otpCode}`);
 
   if (!transporter) {
-    console.warn('[ScanGo EmailService] SMTP environment variables (EMAIL_HOST, EMAIL_USER, EMAIL_PASS) not configured. Logged OTP to console.');
+    console.warn('[ScanGo EmailService] SMTP not configured. Logged OTP to console.');
     return { success: true, simulated: true };
   }
 
@@ -75,7 +76,7 @@ exports.sendOtpEmail = async (toEmail, otpCode) => {
 
   try {
     await transporter.sendMail({
-      from: `"سكان جو | ScanGo" <${fromEmail}>`,
+      from: fromDisplay,
       to: toEmail,
       subject: `رمز تأكيد الحساب: ${otpCode} - سكان جو`,
       html: htmlContent

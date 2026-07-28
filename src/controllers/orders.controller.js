@@ -177,12 +177,18 @@ exports.getOrderHistory = async (req, res, next) => {
     const page = parseInt(req.query.page || '1', 10);
     const limit = parseInt(req.query.limit || '20', 10);
     const status = req.query.status;
+    const patientName = req.query.patientName;
 
     const query = { patient: patientId };
     
     // Status filter
     if (status && status !== 'all') {
       query.status = status;
+    }
+
+    // Patient name filter
+    if (patientName) {
+      query['patientSnapshot.name'] = { $regex: patientName, $options: 'i' };
     }
 
     const total = await Order.countDocuments(query);

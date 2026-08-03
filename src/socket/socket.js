@@ -8,7 +8,18 @@ let io = null;
 const initSocket = (httpServer) => {
   io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      origin: (origin, callback) => {
+        const allowedOrigins = [
+          'https://scango-dashboard.vercel.app',
+          'http://localhost:5173',
+          process.env.DASHBOARD_URL
+        ].filter(Boolean);
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error('CORS not allowed for Socket'));
+        }
+      },
       methods: ['GET', 'POST']
     }
   });

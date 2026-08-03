@@ -73,17 +73,55 @@ exports.notifyTechniciansNewOrder = async (order) => {
       });
     }
 
-    for (const tech of technicians) {
-      await sendNotification({
-        recipientId: tech._id,
-        recipientModel: 'Technician',
-        type: 'new_order', // Generic trigger key
-        titleAr: 'طلب خدمة جديد متاح',
-        bodyAr: `هناك طلب جديد متاح برقم ${order.orderNumber}، اضغط للتفاصيل`,
-        orderId: order._id,
-        fcmToken: tech.fcmToken
-      });
+    if (technicians.length === 0) return;
+
+    const titleAr = 'طلب خدمة جديد متاح';
+    const bodyAr = `هناك طلب جديد متاح برقم ${order.orderNumber}، اضغط للتفاصيل`;
+    const type = 'new_order';
+
+    // 1. Batch Save to Database
+    const notificationDocs = technicians.map(tech => ({
+      recipient: tech._id,
+      recipientModel: 'Technician',
+      type,
+      titleAr,
+      bodyAr,
+      orderId: order._id,
+      isRead: false
+    }));
+    await Notification.insertMany(notificationDocs);
+
+    // 2. Batch Send FCM (Multicast)
+    if (fcmAvailable) {
+      const fcmTokens = technicians
+        .map(tech => tech.fcmToken)
+        .filter(token => token && typeof token === 'string'); // ensure valid tokens
+
+      if (fcmTokens.length > 0) {
+        const message = {
+          tokens: fcmTokens,
+          notification: {
+            title: titleAr,
+            body: bodyAr
+          },
+          data: {
+            type,
+            orderId: String(order._id)
+          }
+        };
+
+        try {
+          // Use sendMulticast for batching (works in most admin SDK versions)
+          const response = await admin.messaging().sendMulticast(message);
+          console.log(`[FCM MULTICAST SUCCESS] Sent ${response.successCount} messages, ${response.failureCount} failed.`);
+        } catch (fcmError) {
+          console.error('[FCM MULTICAST ERROR]', fcmError.message);
+        }
+      }
+    } else {
+      console.log(`[FCM SIMULATION LOG] Batch sent to ${technicians.length} technicians.`);
     }
+
   } catch (error) {
     console.error('Error notifying technicians:', error.message);
   }

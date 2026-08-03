@@ -67,24 +67,38 @@ exports.getAvailableOrders = async (req, res, next) => {
       });
     }
 
+    const page = parseInt(req.query.page || '1', 10);
+    const limit = parseInt(req.query.limit || '20', 10);
+
     // Find orders with status 'pending', 'accepted' or 'pending_review' and no technician assigned in tech's region
     // If region matches, or just general pending orders
-    const query = {
-      status: { $in: ['pending', 'accepted', 'pending_review'] },
-      technician: null,
-      'location.district': tech.region // Filter by technician's active region
-    };
-
-    // If no district matches region, fallback to generic regional search
-    const orders = await Order.find({
+    const baseQuery = {
       status: { $in: ['pending', 'accepted', 'pending_review'] },
       technician: null
-    }).sort({ createdAt: -1 });
+    };
+
+    // Optional: filter by region if needed (currently disabled in fallback)
+    // const query = { ...baseQuery, 'location.district': tech.region };
+    
+    const total = await Order.countDocuments(baseQuery);
+    const pages = Math.ceil(total / limit);
+    const skip = (page - 1) * limit;
+
+    const orders = await Order.find(baseQuery)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
     res.status(200).json({
       success: true,
       message: 'تم استرجاع الطلبات المتاحة بنجاح',
-      data: orders
+      data: orders,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages
+      }
     });
   } catch (error) {
     next(error);

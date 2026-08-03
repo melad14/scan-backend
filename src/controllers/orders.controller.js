@@ -155,10 +155,8 @@ exports.createOrder = async (req, res, next) => {
       ]
     });
 
-    // Notify administrators / nearby technicians (only for regular bookings)
-    if (!isPrescriptionOnly) {
-      await notificationService.notifyTechniciansNewOrder(order);
-    }
+    // Notify administrators / nearby technicians for all bookings
+    await notificationService.notifyTechniciansNewOrder(order);
 
     res.status(201).json({
       success: true,

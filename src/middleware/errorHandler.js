@@ -4,6 +4,7 @@ const errorHandler = (err, req, res, next) => {
   let statusCode = err.statusCode || 500;
   let message = err.message || 'حدث خطأ في الخادم الداخلي';
   let code = err.code || 'INTERNAL_SERVER_ERROR';
+  let errorDetails = undefined;
 
   // Handle Mongoose Validation Error
   if (err.name === 'ValidationError') {
@@ -45,8 +46,9 @@ const errorHandler = (err, req, res, next) => {
     statusCode = 503;
     message = 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً';
     code = 'DB_TIMEOUT';
-    // Temporarily exposing exact error for debugging
-    errorDetails = err.message;
+    if (env.nodeEnv === 'development') {
+      errorDetails = err.message;
+    }
   }
 
   res.status(statusCode).json({
@@ -54,6 +56,7 @@ const errorHandler = (err, req, res, next) => {
     message,
     code,
     statusCode,
+    errorDetails,
     stack: env.nodeEnv === 'development' ? err.stack : undefined
   });
 };

@@ -1,30 +1,42 @@
 const path = require('path');
 const express = require('express');
+const { generalLimiter } = require('./middleware/rateLimiter');
 const cors = require('cors');
+const helmet = require('helmet');
 const errorHandler = require('./middleware/errorHandler');
 const connectDB = require('./config/db');
-const autoSeed = require('./scripts/autoSeed');
 
 const app = express();
 
 // Trust reverse proxy (required for Vercel & express-rate-limit)
 app.set('trust proxy', 1);
 
-// Standard middlewaress
+const allowedOrigins = [
+  'https://scango-dashboard.vercel.app',
+  'http://localhost:5173', // Vite default port
+  process.env.DASHBOARD_URL
+].filter(Boolean);
+
+// Standard middlewares
+app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, postman, curl)
     if (!origin) return callback(null, true);
 
-    // Echo back the requesting origin to prevent CORS blocking local environments or mobile apps
-    callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('CORS not allowed by policy'));
+    }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept']
 }));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(generalLimiter);
 
 // Serve static uploads
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
@@ -38,22 +50,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// DB Connection middleware - MUST be before all routes
-app.use(async (req, res, next) => {
-  try {
-    await connectDB();
-    await autoSeed();
-  } catch (err) {
-    console.error('Database connection error:', err);
-    return res.status(503).json({
-      success: false,
-      message: 'تأخر في الاستجابة من الخادم، يرجى المحاولة مرة أخرى لاحقاً',
-      errorDetails: err.message,
-      code: 'DB_CONNECTION_ERROR'
-    });
-  }
-  next();
-});
+// DB Connection middleware is removed; handled in server.js/api entry
 
 // Route files imports
 const authRoutes = require('./routes/auth.routes');

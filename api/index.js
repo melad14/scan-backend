@@ -1,5 +1,7 @@
-// Vercel serverless entry point
-// app.js now handles DB connection middleware internally before routes2
 const app = require('../src/app');
+const connectDB = require('../src/config/db');
 
-module.exports = app;
+module.exports = async (req, res) => {
+  await connectDB();
+  return app(req, res);
+};

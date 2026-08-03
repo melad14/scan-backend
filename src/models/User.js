@@ -32,7 +32,9 @@ const userSchema = new mongoose.Schema(
     phone: {
       type: String,
       trim: true,
-      default: null
+      default: null,
+      sparse: true,
+      index: true
     },
     age: {
       type: Number

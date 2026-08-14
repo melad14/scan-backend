@@ -32,15 +32,15 @@ const getTransporter = () => {
  * @param {string} otpCode - 6-digit OTP string
  */
 exports.sendOtpEmail = async (toEmail, otpCode) => {
-  const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@scango.app';
-  const fromDisplay = `"سكان جو | ScanGo" <${fromEmail}>`;
+  const fromEmail = process.env.EMAIL_FROM || process.env.EMAIL_USER || 'no-reply@drray.app';
+  const fromDisplay = `"دكتور راي | Dr Ray" <${fromEmail}>`;
   const transporter = getTransporter();
 
   // Console log OTP code for easy development / debugging when SMTP is not configured
-  console.log(`[ScanGo OTP Email] Target: ${toEmail} | Code: ${otpCode}`);
+  console.log(`[Dr Ray OTP Email] Target: ${toEmail} | Code: ${otpCode}`);
 
   if (!transporter) {
-    console.warn('[ScanGo EmailService] SMTP not configured. Logged OTP to console.');
+    console.warn('[Dr Ray EmailService] SMTP not configured. Logged OTP to console.');
     return { success: true, simulated: true };
   }
 
@@ -60,14 +60,14 @@ exports.sendOtpEmail = async (toEmail, otpCode) => {
     </head>
     <body>
       <div class="card">
-        <div class="logo">سكان جو | ScanGo</div>
+        <div class="logo">دكتور راي | Dr Ray</div>
         <div class="subtitle">رمز تفعيل الحساب</div>
-        <p style="color: #333; font-size: 15px;">شكراً لتسجيلك في سكان جو. يرجى إدخال رمز التحقق التالي لإكمال تفعيل حسابك:</p>
+        <p style="color: #333; font-size: 15px;">شكراً لتسجيلك في دكتور راي. يرجى إدخال رمز التحقق التالي لإكمال تفعيل حسابك:</p>
         <div class="otp-box">${otpCode}</div>
         <p style="color: #666; font-size: 13px;">هذا الرمز صالحة لمدة 10 دقائق فقط. يرجى عدم مشاركة هذا الرمز مع أي شخص.</p>
         <div class="footer">
           إذا لم تطلب هذا الرمز، يمكنك تجاهل هذه الرسالة بأمان.<br>
-          جميع الحقوق محفوظة &copy; ${new Date().getFullYear()} سكان جو
+          جميع الحقوق محفوظة &copy; ${new Date().getFullYear()} دكتور راي
         </div>
       </div>
     </body>
@@ -78,12 +78,12 @@ exports.sendOtpEmail = async (toEmail, otpCode) => {
     await transporter.sendMail({
       from: fromDisplay,
       to: toEmail,
-      subject: `رمز تأكيد الحساب: ${otpCode} - سكان جو`,
+      subject: `رمز تأكيد الحساب: ${otpCode} - دكتور راي`,
       html: htmlContent
     });
     return { success: true };
   } catch (error) {
-    console.error('[ScanGo EmailService] Failed to send OTP email:', error);
+    console.error('[Dr Ray EmailService] Failed to send OTP email:', error);
     return { success: false, error: error.message };
   }
 };

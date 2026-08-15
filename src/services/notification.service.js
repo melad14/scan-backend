@@ -38,13 +38,17 @@ const sendNotification = async ({
         },
         data: {
           type,
-          orderId: String(orderId)
+          orderId: String(orderId),
+          title: titleAr,
+          body: bodyAr
         },
         android: {
           notification: {
             channelId,
-            priority: 'high',
-            sound: 'default'
+            priority: 'max',
+            sound: 'default',
+            defaultVibrateTimings: true,
+            defaultLightSettings: true,
           },
           priority: 'high'
         }
@@ -117,13 +121,17 @@ exports.notifyTechniciansNewOrder = async (order) => {
           },
           data: {
             type,
-            orderId: String(order._id)
+            orderId: String(order._id),
+            title: titleAr,
+            body: bodyAr
           },
           android: {
             notification: {
               channelId: 'drray_tech_high_importance',
-              priority: 'high',
-              sound: 'default'
+              priority: 'max',
+              sound: 'default',
+              defaultVibrateTimings: true,
+              defaultLightSettings: true,
             },
             priority: 'high'
           }

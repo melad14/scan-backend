@@ -28,7 +28,7 @@ const sendNotification = async ({
     // 2. Send Firebase Push Notification
     if (fcmAvailable && fcmToken) {
       const isTechnician = recipientModel === 'Technician';
-      const channelId = isTechnician ? 'scango_tech_high_importance' : 'scango_high_importance';
+      const channelId = isTechnician ? 'drray_tech_high_importance' : 'drray_high_importance';
 
       const message = {
         token: fcmToken,
@@ -121,7 +121,7 @@ exports.notifyTechniciansNewOrder = async (order) => {
           },
           android: {
             notification: {
-              channelId: 'scango_tech_high_importance',
+              channelId: 'drray_tech_high_importance',
               priority: 'high',
               sound: 'default'
             },

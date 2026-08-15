@@ -138,8 +138,8 @@ exports.notifyTechniciansNewOrder = async (order) => {
         };
 
         try {
-          // Use sendMulticast for batching (works in most admin SDK versions)
-          const response = await admin.messaging().sendMulticast(message);
+          // Use sendEachForMulticast for batching in Firebase Admin SDK v12+
+          const response = await admin.messaging().sendEachForMulticast(message);
           console.log(`[FCM MULTICAST SUCCESS] Sent ${response.successCount} messages, ${response.failureCount} failed.`);
         } catch (fcmError) {
           console.error('[FCM MULTICAST ERROR]', fcmError.message);
